@@ -8,7 +8,15 @@ contract CrowdFunding {
     error CrowdFunding__ValueMustBeGreaterThanZero();
     error CrowdFunding__NotEnoughMoneyRaised();
     error CrowdFunding__TransactionFailed();
-
+    error CrowdFunding__OnlyOwnerOfCampaignCanWithdraw();
+    error CrowdFunding__CamapignStillActive();
+    
+    enum States{
+        Active,
+        Succesful,
+        Failed
+    }
+    
     struct Campaign {
         string title;
         uint256 goal;
@@ -16,12 +24,9 @@ contract CrowdFunding {
         uint256 duration;
         string description;
         address creator;
+        States state;
     }
-    enum States{
-        Active,
-        Succesful,
-        Failed
-    }
+    
 
     Campaign[] public campaigns;
     address payable public immutable owner;
@@ -45,7 +50,8 @@ contract CrowdFunding {
             duration: duration,
             description: _description,
             raised: 0,
-            creator: msg.sender
+            creator: msg.sender,
+            state: States.Active
         });
 
         campaigns.push(campaign);
@@ -73,19 +79,28 @@ contract CrowdFunding {
     }
 
 
-    function withdraw(uint256 campaignId) external {
-        if (campaignId >= campaigns.length) {
-            revert CrowdFunding__CampaignDoesNotExist();
-        }
-        Campaign storage c = campaigns[campaignId];
+    function withdraw(uint256 campaignId) external { 
+            if (campaignId >= campaigns.length) {
+                revert CrowdFunding__CampaignDoesNotExist();
+            }
+            Campaign storage c = campaigns[campaignId];
 
-        if(c.goal <= c.raised){
-            (bool success,) = owner.call{value: c.raised}("");
+            if(c.creator != msg.sender){
+                revert CrowdFunding__OnlyOwnerOfCampaignCanWithdraw();
+            }
+            if (block.timestamp <= c.duration) {
+                revert CrowdFunding__CamapignStillActive();
+
+            if(c.goal > c.raised){
+                revert CrowdFunding__NotEnoughMoneyRaised();
+            }
+
+            c.state = States.Succesful;
+
+            (bool success,) = payable(c.creator).call{value: c.raised}("");
             if(!success){
                 revert CrowdFunding__TransactionFailed();
             }
-        }else{
-            revert CrowdFunding__NotEnoughMoneyRaised();
         }
     }
 }

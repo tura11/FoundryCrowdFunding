@@ -24,7 +24,8 @@ contract testCrowdFunding is Test {
             uint256 _raised,
             uint256 _duration,
             string memory _description,
-            address creator
+            address creator,
+            CrowdFunding.States state
         ) = crowdFunding.campaigns(0);
 
         assertEq(_title, title);
@@ -33,5 +34,6 @@ contract testCrowdFunding is Test {
         assertEq(_description, description);
         assertEq(creator, address(this));
         assertGt(_duration, block.timestamp);
+        assertEq(uint(state), uint(CrowdFunding.States.Active));
     }
 }
