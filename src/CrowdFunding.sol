@@ -69,7 +69,7 @@ contract CrowdFunding is ReentrancyGuard {
         if (_durationInDays == 0) {
             revert CrowdFunding__DurationMustBeGreaterThanZero();
         }
-        if(_durationInDays > MAX_DURATION / 1 days) {
+        if (_durationInDays > MAX_DURATION / 1 days) {
             revert CrowdFunding__DurationTooLong();
         }
         if (_goal < MIN_CAMAPIGN_GOAL) {
@@ -101,7 +101,6 @@ contract CrowdFunding is ReentrancyGuard {
         if (msg.value <= 0) {
             revert CrowdFunding__ValueMustBeGreaterThanZero();
         }
-        
 
         campaign.raised += msg.value;
         contributions[campaignId][msg.sender] += msg.value;
@@ -109,7 +108,7 @@ contract CrowdFunding is ReentrancyGuard {
         emit contributeCampaing(campaignId);
     }
 
-    function withdraw(uint256 campaignId) external validateCampaignExists (campaignId) nonReentrant {
+    function withdraw(uint256 campaignId) external validateCampaignExists(campaignId) nonReentrant {
         Campaign storage campaign = campaigns[campaignId];
 
         if (campaign.creator != msg.sender) {
@@ -162,23 +161,22 @@ contract CrowdFunding is ReentrancyGuard {
         emit refundMoney(campaignId);
     }
 
-
     //getter functions
 
-    function getCampaign(uint256 campaignId) 
-    external 
-    view 
-    validateCampaignExists(campaignId) 
-    returns (Campaign memory) 
-{
-    return campaigns[campaignId];
-}
+    function getCampaign(uint256 campaignId)
+        external
+        view
+        validateCampaignExists(campaignId)
+        returns (Campaign memory)
+    {
+        return campaigns[campaignId];
+    }
 
-    function getContribution(uint256 campaignId, address contributor) 
-        external 
-        view 
-        validateCampaignExists(campaignId) 
-        returns (uint256) 
+    function getContribution(uint256 campaignId, address contributor)
+        external
+        view
+        validateCampaignExists(campaignId)
+        returns (uint256)
     {
         return contributions[campaignId][contributor];
     }
