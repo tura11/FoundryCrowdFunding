@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-contract CrowdFunding {
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__YouCantContriuteYourOwnCampaign();
     error CrowdFunding__CampaignDoesNotExist();
     error CrowdFunding__CamapignHasEnded();
@@ -13,6 +15,8 @@ contract CrowdFunding {
     error CrowdFunding__CampaingRaisedEnoughMoney();
     error CrowdFunding__NothingToRefund();
     error CrowdFunding__DurationMustBeGreaterThanZero();
+    error CrowdFunding__DurationTooLong();
+    error CrowdFunding__GoalTooLow();
 
     enum States {
         Active,
@@ -39,6 +43,8 @@ contract CrowdFunding {
     address payable public immutable owner;
     mapping(uint256 => mapping(address => uint256)) public contributions;
     uint256 public constant FEE = 3;
+    uint256 public constant MAX_DURATION = 365 days;
+    uint256 public constant MIN_CAMAPIGN_GOAL = 1 ether;
 
     constructor() {
         owner = payable(msg.sender);
@@ -60,8 +66,14 @@ contract CrowdFunding {
         external
     {
         uint256 duration = block.timestamp + (_durationInDays * 1 days);
-        if (_durationInDays < 0) {
+        if (_durationInDays == 0) {
             revert CrowdFunding__DurationMustBeGreaterThanZero();
+        }
+        if (_durationInDays > MAX_DURATION / 1 days) {
+            revert CrowdFunding__DurationTooLong();
+        }
+        if (_goal < MIN_CAMAPIGN_GOAL) {
+            revert CrowdFunding__GoalTooLow();
         }
         Campaign memory campaign = Campaign({
             title: _title,
@@ -96,7 +108,7 @@ contract CrowdFunding {
         emit contributeCampaing(campaignId);
     }
 
-    function withdraw(uint256 campaignId) external validateCampaignExists(campaignId) {
+    function withdraw(uint256 campaignId) external validateCampaignExists(campaignId) nonReentrant {
         Campaign storage campaign = campaigns[campaignId];
 
         if (campaign.creator != msg.sender) {
@@ -124,7 +136,7 @@ contract CrowdFunding {
         emit withdrawMoney(campaignId);
     }
 
-    function refund(uint256 campaignId) external validateCampaignExists(campaignId) {
+    function refund(uint256 campaignId) external validateCampaignExists(campaignId) nonReentrant {
         Campaign storage campaign = campaigns[campaignId];
 
         if (block.timestamp <= campaign.duration) {
