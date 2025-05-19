@@ -15,8 +15,9 @@ contract testCrowdFunding is Test {
         string memory title = "Test Campaign";
         string memory description = "Description here";
         uint256 goal = 10 ether;
+        uint256 durationInDays = 7;
 
-        crowdFunding.createCampaign(title, goal, description);
+        crowdFunding.createCampaign(title, goal, description, durationInDays);
 
         (
             string memory _title,
@@ -33,7 +34,7 @@ contract testCrowdFunding is Test {
         assertEq(_raised, 0);
         assertEq(_description, description);
         assertEq(creator, address(this));
-        assertGt(_duration, block.timestamp);
-        assertEq(uint(state), uint(CrowdFunding.States.Active));
+        assertEq(_duration, block.timestamp + (durationInDays * 1 days));
+        assertEq(uint256(state), uint256(CrowdFunding.States.Active));
     }
 }

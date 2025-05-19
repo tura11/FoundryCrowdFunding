@@ -10,13 +10,16 @@ contract CrowdFunding {
     error CrowdFunding__TransactionFailed();
     error CrowdFunding__OnlyOwnerOfCampaignCanWithdraw();
     error CrowdFunding__CamapignStillActive();
-    
-    enum States{
+    error CrowdFunding__CampaingRaisedEnoughMoney();
+    error CrowdFunding__NothingToRefund();
+    error CrowdFunding__DurationMustBeGreaterThanZero();
+
+    enum States {
         Active,
         Succesful,
         Failed
     }
-    
+
     struct Campaign {
         string title;
         uint256 goal;
@@ -26,12 +29,16 @@ contract CrowdFunding {
         address creator;
         States state;
     }
-    
+
+    event creatingCampaign(string _title, uint256 _goal, string _description, uint256 _durationInDays);
+    event contributeCampaing(uint256 campaignId);
+    event withdrawMoney(uint256 campaignId);
+    event refundMoney(uint256 campaignId);
 
     Campaign[] public campaigns;
     address payable public immutable owner;
-    mapping(address => uint256) contributions;
-
+    mapping(uint256 => mapping(address => uint256)) public contributions;
+    uint256 public constant FEE = 3;
 
     constructor() {
         owner = payable(msg.sender);
@@ -42,8 +49,20 @@ contract CrowdFunding {
         _;
     }
 
-    function createCampaign(string memory _title, uint256 _goal, string memory _description) external {
-        uint256 duration = block.timestamp + 7 days;
+    modifier validateCampaignExists(uint256 campaignId) {
+        if (campaignId >= campaigns.length) {
+            revert CrowdFunding__CampaignDoesNotExist();
+        }
+        _;
+    }
+
+    function createCampaign(string memory _title, uint256 _goal, string memory _description, uint256 _durationInDays)
+        external
+    {
+        uint256 duration = block.timestamp + (_durationInDays * 1 days);
+        if (_durationInDays < 0) {
+            revert CrowdFunding__DurationMustBeGreaterThanZero();
+        }
         Campaign memory campaign = Campaign({
             title: _title,
             goal: _goal,
@@ -55,52 +74,78 @@ contract CrowdFunding {
         });
 
         campaigns.push(campaign);
+        emit creatingCampaign(_title, _goal, _description, _durationInDays);
     }
 
-    function contribute(uint256 campaignId) external payable {
-        if (campaignId >= campaigns.length) {
-            revert CrowdFunding__CampaignDoesNotExist();
-        }
+    function contribute(uint256 campaignId) external payable validateCampaignExists(campaignId) {
+        Campaign storage campaign = campaigns[campaignId];
 
-        Campaign storage c = campaigns[campaignId];
-
-        if (c.creator == msg.sender) {
+        if (campaign.creator == msg.sender) {
             revert CrowdFunding__YouCantContriuteYourOwnCampaign();
         }
-        if (block.timestamp > c.duration) {
+        if (block.timestamp > campaign.duration) {
             revert CrowdFunding__CamapignHasEnded();
         }
         if (msg.value <= 0) {
             revert CrowdFunding__ValueMustBeGreaterThanZero();
         }
 
-        c.raised += msg.value;
-        contributions[msg.sender] += msg.value;
+        campaign.raised += msg.value;
+        contributions[campaignId][msg.sender] += msg.value;
+
+        emit contributeCampaing(campaignId);
     }
 
+    function withdraw(uint256 campaignId) external validateCampaignExists(campaignId) {
+        Campaign storage campaign = campaigns[campaignId];
 
-    function withdraw(uint256 campaignId) external { 
-            if (campaignId >= campaigns.length) {
-                revert CrowdFunding__CampaignDoesNotExist();
-            }
-            Campaign storage c = campaigns[campaignId];
-
-            if(c.creator != msg.sender){
-                revert CrowdFunding__OnlyOwnerOfCampaignCanWithdraw();
-            }
-            if (block.timestamp <= c.duration) {
-                revert CrowdFunding__CamapignStillActive();
-
-            if(c.goal > c.raised){
-                revert CrowdFunding__NotEnoughMoneyRaised();
-            }
-
-            c.state = States.Succesful;
-
-            (bool success,) = payable(c.creator).call{value: c.raised}("");
-            if(!success){
-                revert CrowdFunding__TransactionFailed();
-            }
+        if (campaign.creator != msg.sender) {
+            revert CrowdFunding__OnlyOwnerOfCampaignCanWithdraw();
         }
+        if (block.timestamp <= campaign.duration) {
+            revert CrowdFunding__CamapignStillActive();
+        }
+        if (campaign.goal > campaign.raised) {
+            revert CrowdFunding__NotEnoughMoneyRaised();
+        }
+        uint256 feeAmount = (campaign.raised * FEE) / 100;
+        uint256 amountToCreator = (campaign.raised - feeAmount);
+        campaign.raised = 0;
+        campaign.state = States.Succesful;
+        (bool success2,) = payable(owner).call{value: feeAmount}("");
+        if (!success2) {
+            revert CrowdFunding__TransactionFailed();
+        }
+        (bool success,) = payable(campaign.creator).call{value: amountToCreator}("");
+        if (!success) {
+            revert CrowdFunding__TransactionFailed();
+        }
+
+        emit withdrawMoney(campaignId);
+    }
+
+    function refund(uint256 campaignId) external validateCampaignExists(campaignId) {
+        Campaign storage campaign = campaigns[campaignId];
+
+        if (block.timestamp <= campaign.duration) {
+            revert CrowdFunding__CamapignStillActive();
+        }
+        if (campaign.goal <= campaign.raised) {
+            revert CrowdFunding__CampaingRaisedEnoughMoney();
+        }
+
+        uint256 amount = contributions[campaignId][msg.sender];
+        if (amount == 0) {
+            revert CrowdFunding__NothingToRefund();
+        }
+
+        contributions[campaignId][msg.sender] = 0;
+        campaign.state = States.Failed;
+
+        (bool success,) = payable(msg.sender).call{value: amount}("");
+        if (!success) {
+            revert CrowdFunding__TransactionFailed();
+        }
+        emit refundMoney(campaignId);
     }
 }
