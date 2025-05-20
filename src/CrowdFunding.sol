@@ -184,4 +184,8 @@ contract CrowdFunding is ReentrancyGuard {
     function getCampaignCount() external view returns (uint256) {
         return campaigns.length;
     }
+
+    function getOwner() external view returns (address) {
+        return owner;
+    }
 }
