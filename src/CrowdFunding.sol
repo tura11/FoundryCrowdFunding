@@ -132,34 +132,34 @@ contract CrowdFunding is ReentrancyGuard {
     }
 
     function refund(uint256 campaignId) external validateCampaignExists(campaignId) nonReentrant {
-    Campaign storage campaign = campaigns[campaignId];
+        Campaign storage campaign = campaigns[campaignId];
 
-    if (block.timestamp <= campaign.duration) {
-        revert CrowdFunding__CamapignStillActive();
-    }
-    if (campaign.goal <= campaign.raised) {
-        revert CrowdFunding__CampaingRaisedEnoughMoney();
-    }
+        if (block.timestamp <= campaign.duration) {
+            revert CrowdFunding__CamapignStillActive();
+        }
+        if (campaign.goal <= campaign.raised) {
+            revert CrowdFunding__CampaingRaisedEnoughMoney();
+        }
 
-    uint256 amount = contributions[campaignId][msg.sender];
-    if (amount == 0) {
-        revert CrowdFunding__NothingToRefund();
-    }
+        uint256 amount = contributions[campaignId][msg.sender];
+        if (amount == 0) {
+            revert CrowdFunding__NothingToRefund();
+        }
 
-    contributions[campaignId][msg.sender] = 0;
-    
-    campaign.raised -= amount;
-    
-    if (campaign.state != States.Failed) {
-        campaign.state = States.Failed;
-    }
+        contributions[campaignId][msg.sender] = 0;
 
-    (bool success,) = payable(msg.sender).call{value: amount}("");
-    if (!success) {
-        revert CrowdFunding__TransactionFailed();
+        campaign.raised -= amount;
+
+        if (campaign.state != States.Failed) {
+            campaign.state = States.Failed;
+        }
+
+        (bool success,) = payable(msg.sender).call{value: amount}("");
+        if (!success) {
+            revert CrowdFunding__TransactionFailed();
+        }
+        emit refundMoney(campaignId);
     }
-    emit refundMoney(campaignId);
-}
     //getter functions
 
     function getCampaign(uint256 campaignId)
