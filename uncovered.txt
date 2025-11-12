@@ -40,19 +40,7 @@ Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 4.55ms (7.30ms CPU
 
 Ran 1 test suite in 11.39ms (4.55ms CPU time): 14 tests passed, 0 failed, 0 skipped (14 total tests)
 Uncovered for src/CrowdFunding.sol:
-- Branch (branch: 0, path: 0) (location: source ID 22, lines 54..57, bytes 1781..1849, hits: 0)
-- Line (location: source ID 22, lines 55..56, bytes 1795..1838, hits: 0)
-- Statement (location: source ID 22, lines 55..56, bytes 1795..1838, hits: 0)
-- Branch (branch: 1, path: 0) (location: source ID 22, lines 64..67, bytes 2116..2193, hits: 0)
-- Line (location: source ID 22, lines 65..66, bytes 2130..2182, hits: 0)
-- Statement (location: source ID 22, lines 65..66, bytes 2130..2182, hits: 0)
-- Branch (branch: 2, path: 0) (location: source ID 22, lines 67..70, bytes 2247..2310, hits: 0)
-- Line (location: source ID 22, lines 68..69, bytes 2261..2299, hits: 0)
-- Statement (location: source ID 22, lines 68..69, bytes 2261..2299, hits: 0)
-- Branch (branch: 3, path: 0) (location: source ID 22, lines 70..73, bytes 2350..2408, hits: 0)
-- Line (location: source ID 22, lines 71..72, bytes 2364..2397, hits: 0)
-- Statement (location: source ID 22, lines 71..72, bytes 2364..2397, hits: 0)
-- Branch (branch: 10, path: 0) (location: source ID 22, lines 123..126, bytes 4254..4319, hits: 0)
+
 - Line (location: source ID 22, lines 124..125, bytes 4268..4308, hits: 0)
 - Statement (location: source ID 22, lines 124..125, bytes 4268..4308, hits: 0)
 - Branch (branch: 11, path: 0) (location: source ID 22, lines 127..130, bytes 4428..4493, hits: 0)
