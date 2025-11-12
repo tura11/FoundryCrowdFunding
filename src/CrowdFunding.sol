@@ -22,6 +22,8 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__DurationTooLong();
     error CrowdFunding__GoalTooLow();
     error CrowdFunding__InsufficientAllowance();
+    error CrowdFunding__NoFeesToWithdraw();
+    error CrowdFunding__AlreadyWithdrawn();
 
     enum States {
         Active,
@@ -37,6 +39,7 @@ contract CrowdFunding is ReentrancyGuard {
         string description;
         address creator;
         States state;
+        bool fundsWithdrawn; // Track if creator already withdrew
     }
 
     event CampaignCreated(
@@ -62,12 +65,14 @@ contract CrowdFunding is ReentrancyGuard {
         address indexed contributor,
         uint256 amount
     );
+    event FeesWithdrawn(address indexed owner, uint256 amount);
 
     Campaign[] public campaigns;
     address public immutable owner;
     IERC20 public immutable usdc; // USDC token contract
     
     mapping(uint256 => mapping(address => uint256)) public contributions;
+    uint256 public accumulatedFees; // Total fees collected
     
     uint256 public constant FEE = 3; // 3% fee
     uint256 public constant MAX_DURATION = 365 days;
@@ -124,7 +129,8 @@ contract CrowdFunding is ReentrancyGuard {
             description: _description,
             raised: 0,
             creator: msg.sender,
-            state: States.Active
+            state: States.Active,
+            fundsWithdrawn: false
         });
 
         uint256 campaignId = campaigns.length;
@@ -156,11 +162,6 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__ValueMustBeGreaterThanZero();
         }
 
-
-        campaign.raised += amount;
-        contributions[campaignId][msg.sender] += amount;
-
-        
         // Check if user has approved enough USDC
         uint256 allowance = usdc.allowance(msg.sender, address(this));
         if (allowance < amount) {
@@ -170,11 +171,15 @@ contract CrowdFunding is ReentrancyGuard {
         // Transfer USDC from contributor to this contract
         usdc.safeTransferFrom(msg.sender, address(this), amount);
 
+        campaign.raised += amount;
+        contributions[campaignId][msg.sender] += amount;
+
         emit CampaignContributed(campaignId, msg.sender, amount);
     }
 
     /**
-     * @notice Withdraw funds after successful campaign
+     * @notice Withdraw funds after successful campaign (PULL PATTERN)
+     * @dev Creator withdraws their funds, fees are kept in contract
      * @param campaignId The ID of the campaign to withdraw from
      */
     function withdraw(uint256 campaignId) 
@@ -193,21 +198,45 @@ contract CrowdFunding is ReentrancyGuard {
         if (campaign.goal > campaign.raised) {
             revert CrowdFunding__NotEnoughMoneyRaised();
         }
+        if (campaign.fundsWithdrawn) {
+            revert CrowdFunding__AlreadyWithdrawn();
+        }
 
         uint256 feeAmount = (campaign.raised * FEE) / 100;
         uint256 amountToCreator = campaign.raised - feeAmount;
         
+        // Update state BEFORE transfer (Checks-Effects-Interactions)
         campaign.state = States.Successful;
-        uint256 totalRaised = campaign.raised;
+        campaign.fundsWithdrawn = true;
         campaign.raised = 0;
-
-        // Transfer fee to owner
-        usdc.safeTransfer(owner, feeAmount);
         
-        // Transfer remaining amount to campaign creator
+        // Accumulate fees in contract instead of pushing to owner
+        accumulatedFees += feeAmount;
+
+        // Transfer only to creator - fees stay in contract
         usdc.safeTransfer(campaign.creator, amountToCreator);
 
         emit CampaignWithdrawn(campaignId, campaign.creator, amountToCreator, feeAmount);
+    }
+
+    /**
+     * @notice Owner withdraws accumulated fees (PULL PATTERN)
+     * @dev Separate function for owner to withdraw fees at their convenience
+     */
+    function withdrawFees() external nonReentrant {
+        if (msg.sender != owner) {
+            revert CrowdFunding__OnlyOwnerOfCampaignCanWithdraw();
+        }
+        if (accumulatedFees == 0) {
+            revert CrowdFunding__NoFeesToWithdraw();
+        }
+
+        uint256 feesToWithdraw = accumulatedFees;
+        accumulatedFees = 0; // Reset before transfer
+
+        usdc.safeTransfer(owner, feesToWithdraw);
+
+        emit FeesWithdrawn(owner, feesToWithdraw);
     }
 
     /**
@@ -246,6 +275,7 @@ contract CrowdFunding is ReentrancyGuard {
         emit CampaignRefunded(campaignId, msg.sender, amount);
     }
 
+
     // ========== GETTER FUNCTIONS ==========
 
     function getCampaign(uint256 campaignId)
@@ -276,6 +306,10 @@ contract CrowdFunding is ReentrancyGuard {
 
     function getUSDCAddress() external view returns (address) {
         return address(usdc);
+    }
+
+    function getAccumulatedFees() external view returns (uint256) {
+        return accumulatedFees;
     }
 
     /**
