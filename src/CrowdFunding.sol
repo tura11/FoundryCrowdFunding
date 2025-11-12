@@ -13,7 +13,6 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__CampaignHasEnded();
     error CrowdFunding__ValueMustBeGreaterThanZero();
     error CrowdFunding__NotEnoughMoneyRaised();
-    error CrowdFunding__TransactionFailed();
     error CrowdFunding__OnlyOwnerOfCampaignCanWithdraw();
     error CrowdFunding__CampaignStillActive();
     error CrowdFunding__CampaignRaisedEnoughMoney();
@@ -147,8 +146,9 @@ contract CrowdFunding is ReentrancyGuard {
      */
     function contribute(uint256 campaignId, uint256 amount) 
         external 
+        nonReentrant
         validateCampaignExists(campaignId) 
-        nonReentrant 
+         
     {
         Campaign storage campaign = campaigns[campaignId];
 
@@ -162,17 +162,20 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__ValueMustBeGreaterThanZero();
         }
 
-        // Check if user has approved enough USDC
-        uint256 allowance = usdc.allowance(msg.sender, address(this));
-        if (allowance < amount) {
-            revert CrowdFunding__InsufficientAllowance();
-        }
-
+        
+      
         // Transfer USDC from contributor to this contract
         usdc.safeTransferFrom(msg.sender, address(this), amount);
 
         campaign.raised += amount;
         contributions[campaignId][msg.sender] += amount;
+
+        // Check if user has approved enough USDC
+        uint256 allowance = usdc.allowance(msg.sender, address(this));
+            if (allowance < amount) {
+                revert CrowdFunding__InsufficientAllowance();
+            }
+
 
         emit CampaignContributed(campaignId, msg.sender, amount);
     }
@@ -184,8 +187,9 @@ contract CrowdFunding is ReentrancyGuard {
      */
     function withdraw(uint256 campaignId) 
         external 
-        validateCampaignExists(campaignId) 
         nonReentrant 
+        validateCampaignExists(campaignId) 
+        
     {
         Campaign storage campaign = campaigns[campaignId];
 
@@ -245,8 +249,9 @@ contract CrowdFunding is ReentrancyGuard {
      */
     function refund(uint256 campaignId) 
         external 
-        validateCampaignExists(campaignId) 
         nonReentrant 
+        validateCampaignExists(campaignId) 
+        
     {
         Campaign storage campaign = campaigns[campaignId];
 
