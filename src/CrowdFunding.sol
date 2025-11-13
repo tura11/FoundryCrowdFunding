@@ -23,6 +23,26 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__InsufficientAllowance();
     error CrowdFunding__NoFeesToWithdraw();
     error CrowdFunding__AlreadyWithdrawn();
+    error CrowdFunding__InvalidTierCount();
+    error CrowdFunding__InvalidMilestoneCount();
+    error CrowdFunding__TiersMustBeSorted();
+    error CrowdFunding__TierMinContributionTooLow();
+    error CrowdFunding__MilestonePercentageMustSumTo100();
+    error CrowdFunding__MilestonePercentageTooLow();
+    error CrowdFunding__MilestoneDeadlinesNotSequential();
+    error CrowdFunding__MilestoneDeadlineTooLong();
+    error CrowdFunding__StringTooLong();
+    error CrowdFunding__DescriptionTooLong();
+    error CrowdFunding__TierFull();
+    error CrowdFunding__ContributionBelowTierMinimum();
+    error CrowdFunding__CannotEditAfterContributions();
+    error CrowdFunding__MilestoneNotReached();
+    error CrowdFunding__MilestoneAlreadyApproved();
+    error CrowdFunding__MilestoneAlreadyReleased();
+    error CrowdFunding__AlreadyVoted();
+    error CrowdFunding__NotAContributor();
+    error CrowdFunding__MilestoneNotApproved();
+    error CrowdFunding__TitleTooLong();
 
     enum States {
         Active,
@@ -50,9 +70,9 @@ contract CrowdFunding is ReentrancyGuard {
     }
 
 
-    struct MileStone {
+    struct Milestone {
         string description; // description of the milestone
-        string percentage; // % of funds (must sum to 100%)
+        uint8 percentage; // % of funds (must sum to 100%)
         uint256 deadline; // timestamp when milestone should be gone
         uint16 votesFor;
         uint16 votesAgainst;
@@ -95,11 +115,12 @@ contract CrowdFunding is ReentrancyGuard {
     //mappings
     
     mapping(uint256 => RewardTier[]) public campaignTiers;
-    mapping(uint256 => MileStone[]) public campaignMilestones;
+    mapping(uint256 => Milestone[]) public campaignMilestones;
     mapping(uint256 => mapping(address => uint8)) public contributorTiers; // campaignId => contributor => tierIndex
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public milestoneVotes; // campaignId => milestoneId => voter => hasVoted
     mapping(uint256 => bool) public campaignHasContributions; // track if campaign received any contributions
     mapping(uint256 => uint256) public totalContributors; // count unique contributors per campaign
+    mapping(uint256 => mapping(address => uint256)) public contributions;
 
 
     // constants
@@ -115,6 +136,7 @@ contract CrowdFunding is ReentrancyGuard {
     uint256 public constant MAX_MILESTONE_DAYS = 365 days;
     uint256 public constant FEE = 3; // 3% fee
     uint256 public constant MIN_CAMPAIGN_GOAL = 100 * 10**6; // 100 USDC (6 decimals)
+    uint256 public constant MAX_CAMPAIGN_DURATION = 365 days;
 
     address public immutable owner;
     uint256 public accumulatedFees; // Total fees collected
@@ -152,16 +174,16 @@ contract CrowdFunding is ReentrancyGuard {
         string memory _title,
         uint256 _goal,
         string memory _description,
-        uint256 _durationInDays
-        RewardTier[] memory _tiers;
-        MileStone[] memory _milestones
+        uint256 _durationInDays,
+        RewardTier[] memory _tiers,
+        Milestone[] memory _milestones
     ) external {
         uint256 duration = block.timestamp + (_durationInDays * 1 days);
         
         if (_durationInDays == 0) {
             revert CrowdFunding__DurationMustBeGreaterThanZero();
         }
-        if (_durationInDays > MAX_DURATION / 1 days) {
+        if (_durationInDays > MAX_CAMPAIGN_DURATION) {
             revert CrowdFunding__DurationTooLong();
         }
         if (_goal < MIN_CAMPAIGN_GOAL) {
@@ -201,8 +223,8 @@ contract CrowdFunding is ReentrancyGuard {
         uint256 milestoneLength = _milestones.length;
         for(uint i = 0; i < milestoneLength; i++) {
             Milestone memory milestone = Milestone({
-                description: _milestones[i].description
-                 percentage: _milestones[i].percentage,
+                description: _milestones[i].description,
+                percentage: _milestones[i].percentage,
                 deadline: _milestones[i].deadline,
                 votesFor: 0,
                 votesAgainst: 0,
@@ -221,13 +243,15 @@ contract CrowdFunding is ReentrancyGuard {
      * @param campaignId The ID of the campaign to contribute to
      * @param amount Amount of USDC to contribute (with 6 decimals)
      */
-    function contribute(uint256 campaignId, uint256 amount) 
+    function contribute(uint256 campaignId, uint256 amount, uint8 tierIndex) 
         external 
         nonReentrant
         validateCampaignExists(campaignId) 
          
     {
         Campaign storage campaign = campaigns[campaignId];
+        RewardTier storage tier = campaignTiers[campaignId][tierIndex];
+
 
         if (campaign.creator == msg.sender) {
             revert CrowdFunding__YouCantContributeYourOwnCampaign();
@@ -239,8 +263,19 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__ValueMustBeGreaterThanZero();
         }
 
+        if (tierIndex >= campaignTiers[campaignId].length) {
+            revert CrowdFunding__CampaignDoesNotExist(); // reusing error for invalid tier
+        }
+        if (amount < tier.minContribution) {
+            revert CrowdFunding__ContributionBelowTierMinimum();
+        }
+        if (tier.maxBackers > 0 && tier.currentBackers >= tier.maxBackers) {
+            revert CrowdFunding__TierFull();
+        }
+            
+        bool isNewContributor = contributions[campaignId][msg.sender] == 0;
+
         
-      
         // Transfer USDC from contributor to this contract
         usdc.safeTransferFrom(msg.sender, address(this), amount);
 
@@ -252,6 +287,20 @@ contract CrowdFunding is ReentrancyGuard {
             if (allowance < amount) {
                 revert CrowdFunding__InsufficientAllowance();
             }
+        
+        if (isNewContributor) {
+        contributorTiers[campaignId][msg.sender] = tierIndex;
+        tier.currentBackers++;
+        totalContributors[campaignId]++;
+        } else {
+        // Allow upgrading to higher tier
+        uint8 currentTier = contributorTiers[campaignId][msg.sender];
+        if (tierIndex > currentTier) {
+            campaignTiers[campaignId][currentTier].currentBackers--;
+            contributorTiers[campaignId][msg.sender] = tierIndex;
+            tier.currentBackers++;
+        }
+    }
 
 
         emit CampaignContributed(campaignId, msg.sender, amount);
@@ -358,7 +407,7 @@ contract CrowdFunding is ReentrancyGuard {
     }
 
     function _validateTiers(RewardTier[] memory _tiers) internal pure returns (RewardTier[] memory) {
-        if (_tiers.lenght < MIN_TIERS || _tiers.lenght > MAX_TIERS) {
+        if (_tiers.length < MIN_TIERS || _tiers.length > MAX_TIERS) {
             revert CrowdFunding__InvalidTierCount();
         }
         uint256 tierLength = _tiers.length;
@@ -383,7 +432,7 @@ contract CrowdFunding is ReentrancyGuard {
     }
 
 
-    unction _validateMilestones(Milestone[] memory _milestones, uint256 campaignEndTime) internal pure {
+    function _validateMilestones(Milestone[] memory _milestones, uint256 campaignEndTime) internal pure {
     if (_milestones.length < MIN_MILESTONES || _milestones.length > MAX_MILESTONES) {
         revert CrowdFunding__InvalidMilestoneCount();
     }
