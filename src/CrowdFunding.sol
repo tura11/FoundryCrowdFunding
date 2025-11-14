@@ -35,13 +35,6 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__DescriptionTooLong();
     error CrowdFunding__TierFull();
     error CrowdFunding__ContributionBelowTierMinimum();
-    error CrowdFunding__CannotEditAfterContributions();
-    error CrowdFunding__MilestoneNotReached();
-    error CrowdFunding__MilestoneAlreadyApproved();
-    error CrowdFunding__MilestoneAlreadyReleased();
-    error CrowdFunding__AlreadyVoted();
-    error CrowdFunding__NotAContributor();
-    error CrowdFunding__MilestoneNotApproved();
     error CrowdFunding__TitleTooLong();
 
     enum States {
@@ -137,6 +130,7 @@ contract CrowdFunding is ReentrancyGuard {
     uint256 public constant FEE = 3; // 3% fee
     uint256 public constant MIN_CAMPAIGN_GOAL = 100 * 10**6; // 100 USDC (6 decimals)
     uint256 public constant MAX_CAMPAIGN_DURATION = 365 days;
+    uint256 public constant DIVIDER = 100;
 
     address public immutable owner;
     uint256 public accumulatedFees; // Total fees collected
@@ -214,14 +208,15 @@ contract CrowdFunding is ReentrancyGuard {
 
         uint256 campaignId = campaigns.length;
         campaigns.push(campaign);
-
+        
+        RewardTier[] storage tiers = campaignTiers[campaignId];
         uint256 tierLength = _tiers.length;
-        for(uint i = 0; i < tierLength; i++) {
-            campaignTiers[campaignId].push(_tiers[i]);
+        for(uint256 i = 0; i < tierLength; ++i) {
+            tiers.push(_tiers[i]);
         }
 
         uint256 milestoneLength = _milestones.length;
-        for(uint i = 0; i < milestoneLength; i++) {
+        for(uint256 i = 0; i < milestoneLength; ++i) {
             Milestone memory milestone = Milestone({
                 description: _milestones[i].description,
                 percentage: _milestones[i].percentage,
@@ -283,10 +278,7 @@ contract CrowdFunding is ReentrancyGuard {
         contributions[campaignId][msg.sender] += amount;
 
         // Check if user has approved enough USDC
-        uint256 allowance = usdc.allowance(msg.sender, address(this));
-            if (allowance < amount) {
-                revert CrowdFunding__InsufficientAllowance();
-            }
+       
         
         if (isNewContributor) {
         contributorTiers[campaignId][msg.sender] = tierIndex;
@@ -301,7 +293,10 @@ contract CrowdFunding is ReentrancyGuard {
             tier.currentBackers++;
         }
     }
-
+        uint256 allowance = usdc.allowance(msg.sender, address(this));
+            if (allowance < amount) {
+                revert CrowdFunding__InsufficientAllowance();
+            }
 
         emit CampaignContributed(campaignId, msg.sender, amount);
     }
@@ -332,7 +327,7 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__AlreadyWithdrawn();
         }
 
-        uint256 feeAmount = (campaign.raised * FEE) / 100;
+        uint256 feeAmount = (campaign.raised * FEE) / DIVIDER;
         uint256 amountToCreator = campaign.raised - feeAmount;
         
         // Update state BEFORE transfer (Checks-Effects-Interactions)
@@ -406,12 +401,12 @@ contract CrowdFunding is ReentrancyGuard {
         emit CampaignRefunded(campaignId, msg.sender, amount);
     }
 
-    function _validateTiers(RewardTier[] memory _tiers) internal pure returns (RewardTier[] memory) {
+    function _validateTiers(RewardTier[] memory _tiers) internal pure  {
         if (_tiers.length < MIN_TIERS || _tiers.length > MAX_TIERS) {
             revert CrowdFunding__InvalidTierCount();
         }
         uint256 tierLength = _tiers.length;
-        for(uint i = 0; i < tierLength; i++) {
+        for(uint256 i = 0; i < tierLength; i++) {
             if (bytes(_tiers[i].name).length > MAX_STRING_LENGTH) {
                 revert CrowdFunding__StringTooLong();
             }
@@ -439,7 +434,7 @@ contract CrowdFunding is ReentrancyGuard {
     
     uint256 totalPercentage = 0;
     uint256 milestoneLength = _milestones.length;
-    for (uint i = 0; i < milestoneLength; i++) {
+    for (uint256 i = 0; i < milestoneLength; i++) {
         // Check string length
         if (bytes(_milestones[i].description).length > MAX_STRING_LENGTH) {
             revert CrowdFunding__StringTooLong();
