@@ -270,6 +270,12 @@ contract CrowdFunding is ReentrancyGuard {
             
         bool isNewContributor = contributions[campaignId][msg.sender] == 0;
 
+
+        uint256 allowance = usdc.allowance(msg.sender, address(this));
+            if (allowance < amount) {
+                revert CrowdFunding__InsufficientAllowance();
+            }
+
         
         // Transfer USDC from contributor to this contract
         usdc.safeTransferFrom(msg.sender, address(this), amount);
@@ -293,11 +299,7 @@ contract CrowdFunding is ReentrancyGuard {
             tier.currentBackers++;
         }
     }
-        uint256 allowance = usdc.allowance(msg.sender, address(this));
-            if (allowance < amount) {
-                revert CrowdFunding__InsufficientAllowance();
-            }
-
+      
         emit CampaignContributed(campaignId, msg.sender, amount);
     }
 
@@ -400,6 +402,20 @@ contract CrowdFunding is ReentrancyGuard {
 
         emit CampaignRefunded(campaignId, msg.sender, amount);
     }
+
+    function cancelCamapign(uint256 campaignId) external nonReentrant {
+        Campaign storage campaign = campaigns[campaignId];
+        if (msg.sender != campaign.creator) {
+            revert CrowdFunding__OnlyCreatorOfCampaignCanCancel();
+        }
+        if (campaign.state != States.Created) {
+            revert CrowdFunding__CampaignAlreadyStarted();
+        }
+        campaign.state = States.Cancelled;
+        emit CampaignCancelled(campaignId);
+    }
+
+    // ========== VALIDATE FUNCTIONS ==========
 
     function _validateTiers(RewardTier[] memory _tiers) internal pure  {
         if (_tiers.length < MIN_TIERS || _tiers.length > MAX_TIERS) {
