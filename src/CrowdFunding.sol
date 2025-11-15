@@ -125,6 +125,7 @@ contract CrowdFunding is ReentrancyGuard {
     mapping(uint256 => bool) public campaignHasContributions; // track if campaign received any contributions
     mapping(uint256 => uint256) public totalContributors; // count unique contributors per campaign
     mapping(uint256 => mapping(address => uint256)) public contributions;
+    mapping(uint256 => mapping(uint256 => uint256)) public milestoneVotingDeadline;
 
 
     // constants
@@ -142,6 +143,8 @@ contract CrowdFunding is ReentrancyGuard {
     uint256 public constant MIN_CAMPAIGN_GOAL = 100 * 10**6; // 100 USDC (6 decimals)
     uint256 public constant MAX_CAMPAIGN_DURATION = 365 days;
     uint256 public constant DIVIDER = 100;
+    uint256 public constant VOTING_PERIOD = 7 days;
+    uint8 public constant APPROVAL_THRESHOLD = 51;
 
     address public immutable owner;
     uint256 public accumulatedFees; // Total fees collected
