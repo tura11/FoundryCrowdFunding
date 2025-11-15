@@ -36,6 +36,8 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__TierFull();
     error CrowdFunding__ContributionBelowTierMinimum();
     error CrowdFunding__TitleTooLong();
+    error CrowdFunding__MilestoneDoesNotExist();
+    error CrowdFunding__NotAContributor();
 
     enum States {
         Active,
@@ -101,6 +103,15 @@ contract CrowdFunding is ReentrancyGuard {
         uint256 amount
     );
     event FeesWithdrawn(address indexed owner, uint256 amount);
+
+    event MilestoneVoted(
+    uint256 indexed campaignId, 
+    uint256 indexed milestoneId, 
+    address indexed voter, 
+    bool vote,
+    uint16 votesFor,
+    uint16 votesAgainst
+    );
 
     Campaign[] public campaigns;
     IERC20 public immutable usdc; // USDC token contract
@@ -304,8 +315,104 @@ contract CrowdFunding is ReentrancyGuard {
     }
 
 
-    function voteMilestones(uint256 campaignId, uint256 milestoneId, bool vote) external validateCampaignExists(campaignId){
+    /**
+    * @notice Vote for Milestone
+    * @dev Only contributors can vote once
+    * @param campaignId Campaign ID
+    * @param milestoneId Milesonte index (0, 1, 2...)
+    * @param vote true - for, false - against
+    */
+    function voteMilestone(
+        uint256 campaignId, 
+        uint256 milestoneId, 
+        bool vote
+    ) 
+        external 
+        validateCampaignExists(campaignId) 
+    {
+        Campaign storage campaign = campaigns[campaignId];
         
+        // check if milestone exists
+        if (milestoneId >= campaignMilestones[campaignId].length) {
+            revert CrowdFunding__MilestoneNotFound();
+        }
+        
+        Milestone storage milestone = campaignMilestones[campaignId][milestoneId];
+        
+        //check user is contributor
+        if (contributions[campaignId][msg.sender] == 0) {
+            revert CrowdFunding__NotAContributor();
+        }
+        
+        // check if user has already voted
+        if (milestoneVotes[campaignId][milestoneId][msg.sender]) {
+            revert CrowdFunding__AlreadyVoted();
+        }
+        
+        // check if campaign is still active
+        if (block.timestamp <= campaign.duration) {
+            revert CrowdFunding__CampaignStillActive();
+        }
+        if (campaign.raised < campaign.goal) {
+            revert CrowdFunding__NotEnoughMoneyRaised();
+        }
+        
+        // check if milestone deadline has not been reached
+        if (block.timestamp < milestone.deadline) {
+            revert CrowdFunding__MilestoneDeadlineNotReached();
+        }
+        
+        // inicialize milestone voting deadline
+        if (milestoneVotingDeadline[campaignId][milestoneId] == 0) {
+            milestoneVotingDeadline[campaignId][milestoneId] = milestone.deadline + VOTING_PERIOD;
+        }
+        
+        // check if milestone voting period has expired
+        if (block.timestamp > milestoneVotingDeadline[campaignId][milestoneId]) {
+            revert CrowdFunding__MilestoneVotingPeriodExpired();
+        }
+        
+        // check if milestone has already been released
+        if (milestone.approved || milestone.fundsReleased) {
+            revert CrowdFunding__MilestoneAlreadyReleased();
+        }
+        
+        // store vote
+        milestoneVotes[campaignId][milestoneId][msg.sender] = true;
+        
+        // update votes
+        if (vote) {
+            milestone.votesFor++;
+        } else {
+            milestone.votesAgainst++;
+        }
+        
+        // check if thresshold has been reached
+        uint256 totalVotes = milestone.votesFor + milestone.votesAgainst;
+        uint256 totalContributorsCount = totalContributors[campaignId];
+        
+        // Auto-approve if thresshold has been reached
+        if (!milestone.approved && totalVotes >= totalContributorsCount) {
+            uint256 approvalPercentage = (milestone.votesFor * 100) / totalVotes;
+            
+            if (approvalPercentage >= APPROVAL_THRESHOLD) {
+                milestone.approved = true;
+                emit MilestoneApproved(campaignId, milestoneId);
+            } else {
+                emit MilestoneRejected(campaignId, milestoneId);
+            }
+        }
+        
+        emit MilestoneVoted(
+            campaignId, 
+            milestoneId, 
+            msg.sender, 
+            vote,
+            milestone.votesFor,
+            milestone.votesAgainst
+        );
+    }
+
     }
 
     /**
