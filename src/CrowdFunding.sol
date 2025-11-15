@@ -303,6 +303,11 @@ contract CrowdFunding is ReentrancyGuard {
         emit CampaignContributed(campaignId, msg.sender, amount);
     }
 
+
+    function voteMilestones(uint256 campaignId, uint256 milestoneId, bool vote) external validateCampaignExists(campaignId){
+        
+    }
+
     /**
      * @notice Withdraw funds after successful campaign (PULL PATTERN)
      * @dev Creator withdraws their funds, fees are kept in contract
