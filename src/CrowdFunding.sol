@@ -416,7 +416,16 @@ contract CrowdFunding is ReentrancyGuard {
         );
     }
 
+
+    function releaseMilestoneFunds(uint256 campaignId, uint256 milestoneId) external {
+        Campaign storage campaign = campaigns[campaignId];
+        Milestone storage milestone = campaignMilestones[campaignId][milestoneId];
+
+        if(campaign.creator != msg.sender) {
+            revert CrowdFunding__OnlyCreatorCanReleaseFunds();
+        }
     }
+
 
     /**
      * @notice Withdraw funds after successful campaign (PULL PATTERN)
@@ -537,7 +546,7 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__InvalidTierCount();
         }
         uint256 tierLength = _tiers.length;
-        for(uint256 i = 0; i < tierLength; i++) {
+        for(uint256 i = 0; i < tierLength; ++i) {
             if (bytes(_tiers[i].name).length > MAX_STRING_LENGTH) {
                 revert CrowdFunding__StringTooLong();
             }
