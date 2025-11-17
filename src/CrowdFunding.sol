@@ -424,6 +424,10 @@ contract CrowdFunding is ReentrancyGuard {
         if(campaign.creator != msg.sender) {
             revert CrowdFunding__OnlyCreatorCanReleaseFunds();
         }
+
+        if (milestoneId >= campaignMilestones[campaignId].length) {
+            revert CrowdFunding__MilestoneNotFound();
+        }
     }
 
 
