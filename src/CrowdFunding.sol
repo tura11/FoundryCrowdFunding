@@ -428,6 +428,13 @@ contract CrowdFunding is ReentrancyGuard {
         if (milestoneId >= campaignMilestones[campaignId].length) {
             revert CrowdFunding__MilestoneNotFound();
         }
+
+        if (block.timestamp <= campagin.duration) {
+            revert CrowdFunding__CampaignStillActive();
+        }
+
+        
+
     }
 
 
