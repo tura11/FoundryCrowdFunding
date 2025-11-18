@@ -433,7 +433,51 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__CampaignStillActive();
         }
 
+        if (campaign.raised < campaign.goal) {
+            revert CrowdFunding__NotEnoughMoneyRaised();
+        }
+
+        if(!milestone.approved) {
+            revert CrowdFunding__MilestoneNotApproved();
+        }
+
+        if(milestone.fundsReleased) {
+            revert CrowdFunding__MilestoneFundsAlreadyReleased();
+        }
+
+        if(milestoneId > 0){
+            for(uint256 i = 0; i < milestoneId; ++i) {
+                if(!campaignMilestones[campaignId][i].fundsReleased) {
+                    revert CrowdFunding__MilestoneNotApproved();
+                }
+            }
+        }
+        uint256 totalRaised = campaign.raised;
+        uint256 milestoneAmount = (totalRaised * milestone.percentage) / DIVIDER;
+        uint256 feeAmount = (milestoneAmount * FEE) / DIVIDER;
+        uint256 amountToCreator = milestoneAmount - feeAmount;
+
+        milestone.fundsReleased = true;
+        campaign.raised -= milestoneAmount;
         
+        bool allMilestonesReleased = true;
+        for (uint256 i = 0; i < campaignMilestones[campaignId].length; ++i) {
+            if (!campaignMilestones[campaignId][i].fundsReleased) {
+                allMilestonesReleased = false;
+                break;
+            }
+        }
+
+        if (allMilestonesReleased) {
+            camaping.state = States.Successful;
+            campaign.fundsWithdrawn = true;
+        }
+
+        accumulatedFees += feeAmount;
+
+        usdc.safeTransfer(campaign.creator, amountToCreator);
+        emit MilestoneFundsReleased(campaignId, milestoneId, amountToCreator, feeAmount);
+
 
     }
 
