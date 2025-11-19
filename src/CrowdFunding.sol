@@ -399,7 +399,7 @@ contract CrowdFunding is ReentrancyGuard {
         
         // Auto-approve if all contributors voted
         if (!milestone.approved && totalVotes >= totalContributorsCount) {
-            uint256 approvalPercentage = (milestone.votesFor * 100) / totalVotes;
+            uint256 approvalPercentage = (milestone.votesFor * DIVIDER) / totalVotes;
             
             if (approvalPercentage >= APPROVAL_THRESHOLD) {
                 milestone.approved = true;
@@ -526,7 +526,7 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__NotEnoughVotesToApprove();
         }
         
-        uint256 approvalPercentage = (milestone.votesFor * 100) / totalVotes;
+        uint256 approvalPercentage = (milestone.votesFor * DIVIDER) / totalVotes;
         
         if (approvalPercentage >= APPROVAL_THRESHOLD) {
             milestone.approved = true;
