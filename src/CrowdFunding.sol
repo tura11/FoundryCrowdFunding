@@ -525,6 +525,47 @@ contract CrowdFunding is ReentrancyGuard {
         emit CampaignWithdrawn(campaignId, campaign.creator, amountToCreator, feeAmount);
     }
 
+    function finalizeMilestoneVoting(uint256 campaignId, uint256 milestoneId) 
+    external 
+    validateCampaignExists(campaignId) 
+    {
+
+    if (milestoneId >= campaignMilestones[campaignId].length) {
+        revert CrowdFunding__MilestoneNotFound();
+    }
+    
+    Milestone storage milestone = campaignMilestones[campaignId][milestoneId];
+    
+  
+    if (milestone.approved || milestone.fundsReleased) {
+        revert CrowdFunding__MilestoneAlreadyReleased();
+    }
+    
+   
+    uint256 votingDeadline = milestoneVotingDeadline[campaignId][milestoneId];
+    if (votingDeadline == 0 || block.timestamp < votingDeadline) {
+        revert CrowdFunding__CampaignStillActive(); // Reusing error
+    }
+    
+   
+    uint256 totalVotes = milestone.votesFor + milestone.votesAgainst;
+    
+    if (totalVotes == 0) {
+        revert CrowdFunding__NotEnoughVotesToApprove();
+    }
+    
+    uint256 approvalPercentage = (milestone.votesFor * 100) / totalVotes;
+    
+    if (approvalPercentage >= APPROVAL_THRESHOLD) {
+        milestone.approved = true;
+        emit MilestoneApproved(campaignId, milestoneId);
+    } else {
+        emit MilestoneRejected(campaignId, milestoneId);
+    }
+    }
+
+
+
     /**
      * @notice Owner withdraws accumulated fees (PULL PATTERN)
      * @dev Separate function for owner to withdraw fees at their convenience
@@ -696,6 +737,15 @@ contract CrowdFunding is ReentrancyGuard {
     function getAccumulatedFees() external view returns (uint256) {
         return accumulatedFees;
     }
+    function getCampaignMilestones(uint256 campaignId) 
+    external 
+    view 
+    validateCampaignExists(campaignId) 
+        returns (Milestone[] memory) 
+    {
+        return campaignMilestones[campaignId];
+    }
+
 
     /**
      * @notice Get current state of campaign (computed)
