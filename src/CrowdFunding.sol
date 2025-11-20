@@ -169,10 +169,10 @@ contract CrowdFunding is ReentrancyGuard {
     uint8 public constant MIN_MILESTONES = 2;
     uint8 public constant MAX_MILESTONES = 5;
     uint8 public constant MIN_MILESTONE_PERCENTAGE = 10; // 10%
-    uint256 public constant MAX_MILESTONE_DAYS = 365 days;
+    uint256 public constant MAX_MILESTONE_DAYS = 365;
     uint256 public constant FEE = 3; // 3% platform fee
     uint256 public constant MIN_CAMPAIGN_GOAL = 100 * 10**6; // 100 USDC
-    uint256 public constant MAX_CAMPAIGN_DURATION = 365 days;
+    uint256 public constant MAX_CAMPAIGN_DURATION = 365;
     uint256 public constant DIVIDER = 100;
     uint256 public constant VOTING_PERIOD = 7 days;
     uint8 public constant APPROVAL_THRESHOLD = 51; // 51% approval needed
