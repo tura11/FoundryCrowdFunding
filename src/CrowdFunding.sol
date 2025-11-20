@@ -176,12 +176,20 @@ contract CrowdFunding is ReentrancyGuard {
     uint256 public constant DIVIDER = 100;
     uint256 public constant VOTING_PERIOD = 7 days;
     uint8 public constant APPROVAL_THRESHOLD = 51; // 51% approval needed
-    address public constant USDC_ADDRESS = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia USDC
 
     // ========== CONSTRUCTOR ==========
-    constructor() {
+    /**
+     * @notice Initialize the crowdfunding contract
+     * @param _usdcAddress Address of the USDC token contract
+     * @dev Use these addresses:
+     *      Sepolia: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+     *      Mainnet: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+     *      Base: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+     *      Polygon: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359
+     */
+    constructor(address _usdcAddress) {
         owner = msg.sender;
-        usdc = IERC20(USDC_ADDRESS);
+        usdc = IERC20(_usdcAddress);
     }
 
     // ========== MODIFIERS ==========
@@ -769,7 +777,7 @@ contract CrowdFunding is ReentrancyGuard {
         external 
         view 
         validateCampaignExists(campaignId) 
-        returns (uint256) 
+        returns (uint256)
     {
         return contributorTiers[campaignId][contributor];
     }
