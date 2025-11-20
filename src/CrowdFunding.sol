@@ -43,6 +43,7 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__TierFull();
     error CrowdFunding__ContributionBelowTierMinimum();
     error CrowdFunding__TitleTooLong();
+    error CrowdFunding__MilestoneDoesNotExist();
     error CrowdFunding__NotAContributor();
     error CrowdFunding__AlreadyVoted();
     error CrowdFunding__MilestoneDeadlineNotReached();
@@ -399,7 +400,7 @@ contract CrowdFunding is ReentrancyGuard {
         
         // Auto-approve if all contributors voted
         if (!milestone.approved && totalVotes >= totalContributorsCount) {
-            uint256 approvalPercentage = (milestone.votesFor * DIVIDER) / totalVotes;
+            uint256 approvalPercentage = (milestone.votesFor * 100) / totalVotes;
             
             if (approvalPercentage >= APPROVAL_THRESHOLD) {
                 milestone.approved = true;
@@ -526,7 +527,7 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__NotEnoughVotesToApprove();
         }
         
-        uint256 approvalPercentage = (milestone.votesFor * DIVIDER) / totalVotes;
+        uint256 approvalPercentage = (milestone.votesFor * 100) / totalVotes;
         
         if (approvalPercentage >= APPROVAL_THRESHOLD) {
             milestone.approved = true;
@@ -769,7 +770,7 @@ contract CrowdFunding is ReentrancyGuard {
         view 
         validateCampaignExists(campaignId) 
         returns (uint256) 
-        {
-            return contributorTiers[campaignId][contributor];
-        }
+    {
+        return contributorTiers[campaignId][contributor];
+    }
 }
