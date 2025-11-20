@@ -17,7 +17,7 @@ contract testCrowdFunding is Test {
 
     uint256 constant INITIAL_BALANCE = 10_000 * 10**6;
     uint256 constant CAMPAIGN_GOAL = 1_000 * 10**6;
-    uint256 constant CAMPAIGN_DURATION = 30 days;
+    uint256 constant CAMPAIGN_DURATION = 365 days;
 
     function setUp() public {
         owner = address(this);
@@ -63,7 +63,7 @@ contract testCrowdFunding is Test {
         milestones[0] = CrowdFunding.Milestone({
             description: "First milestone",
             percentage: 50,
-            deadline: block.timestamp + 60 days,
+            deadline: block.timestamp + 400 days,
             votesFor: 0,
             votesAgainst: 0,
             approved: false,
@@ -72,7 +72,7 @@ contract testCrowdFunding is Test {
         milestones[1] = CrowdFunding.Milestone({
             description: "Second milestone",
             percentage: 50,
-            deadline: block.timestamp + 90 days,
+            deadline: block.timestamp + 430 days,
             votesFor: 0,
             votesAgainst: 0,
             approved: false,
@@ -92,7 +92,7 @@ contract testCrowdFunding is Test {
             "Test Campaign",
             CAMPAIGN_GOAL,
             "Test Description",
-            30, // 30 days
+            365, // 365 days
             tiers,
             milestones
         );
@@ -110,6 +110,23 @@ contract testCrowdFunding is Test {
         
         // Verify campaign count
         assertEq(crowdFunding.getCampaignCount(), 1);
+    }
+
+
+    function testCreateCampaignRevertsDurationTooLong() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        vm.expectRevert(CrowdFunding.CrowdFunding__DurationTooLong.selector);
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Test Description",
+            366, // 366 days
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
     }
 
     // ============================
@@ -140,7 +157,7 @@ contract testCrowdFunding is Test {
         milestones[0] = CrowdFunding.Milestone({
             description: "First milestone",
             percentage: 50,
-            deadline: block.timestamp + 60 days,
+            deadline: block.timestamp + 400 days,
             votesFor: 0,
             votesAgainst: 0,
             approved: false,
@@ -149,7 +166,7 @@ contract testCrowdFunding is Test {
         milestones[1] = CrowdFunding.Milestone({
             description: "Second milestone",
             percentage: 50,
-            deadline: block.timestamp + 90 days,
+            deadline: block.timestamp + 430 days,
             votesFor: 0,
             votesAgainst: 0,
             approved: false,
@@ -168,7 +185,7 @@ contract testCrowdFunding is Test {
             "Test Campaign",
             CAMPAIGN_GOAL,
             "Test Description",
-            30,
+            365,
             tiers,
             milestones
         );
