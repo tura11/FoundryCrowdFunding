@@ -112,6 +112,10 @@ contract testCrowdFunding is Test {
         assertEq(crowdFunding.getCampaignCount(), 1);
     }
 
+    // ============================
+    //       CAMPAIGN REVERTS
+    // ============================
+
 
     function testCreateCampaignRevertsDurationTooLong() public {
         vm.startPrank(creator);
@@ -123,6 +127,39 @@ contract testCrowdFunding is Test {
             CAMPAIGN_GOAL,
             "Test Description",
             366, // 366 days
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+    }
+
+    function testCreateCampaingRevertDurationMustBeGraterThanZero() public {
+           vm.startPrank(creator);
+           CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+           CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+           vm.expectRevert(CrowdFunding.CrowdFunding__DurationMustBeGreaterThanZero.selector);
+           crowdFunding.createCampaign(
+               "Test Campaign",
+               CAMPAIGN_GOAL,
+               "Test Description",
+               0, // 0 days
+               tiers,
+               milestones
+           );
+           vm.stopPrank();
+    }
+
+    function testCreateCampaignRevertDurationTooLow() public {
+        uint256 campaingGoal = 10 * 10**6;
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        vm.expectRevert(CrowdFunding.CrowdFunding__GoalTooLow.selector);
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            campaingGoal,
+            "Test Description",
+            1, // 1 day
             tiers,
             milestones
         );
