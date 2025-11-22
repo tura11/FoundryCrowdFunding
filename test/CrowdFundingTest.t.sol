@@ -149,7 +149,7 @@ contract testCrowdFunding is Test {
            vm.stopPrank();
     }
 
-    function testCreateCampaignRevertDurationTooLow() public {
+    function testCreateCampaignRevertGoalTooLow() public {
         uint256 campaingGoal = 10 * 10**6;
         vm.startPrank(creator);
         CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
@@ -165,6 +165,41 @@ contract testCrowdFunding is Test {
         );
         vm.stopPrank();
     }
+
+    function testCreateCampaginRevertsTitleTooLong() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        vm.expectRevert(CrowdFunding.CrowdFunding__TitleTooLong.selector);
+        crowdFunding.createCampaign(
+            "A highly extended crowdfunding campaign title intentionally crafted to exceed the typical two-hundred-character limit in order to thoroughly test input validation and ensure that long strings are properly rejected by the smart contract logic",
+            CAMPAIGN_GOAL,
+            "Test Description",
+            1, // 1 day
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+    }
+    
+    function testCreateCampaignRevertsDescriptionTooLong() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        vm.expectRevert(CrowdFunding.CrowdFunding__DescriptionTooLong.selector);
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "This campaign description is intentionally written to surpass two hundred characters, allowing you to verify that your smart contract correctly enforces maximum string length restrictions and triggers the appropriate custom error when oversized input is submitted ",
+            1, // 1 day
+            tiers,
+            milestones
+        );
+    }
+
+
+
+
 
     // ============================
     //       HELPER FUNCTIONS
