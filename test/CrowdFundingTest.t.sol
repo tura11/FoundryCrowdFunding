@@ -478,6 +478,80 @@ contract testCrowdFunding is Test {
         crowdFunding.contribute(0,VALUE_TO_CONTRIBUTE, 10);
     }
 
+    function testContributeRevertsContributionBelowTierMinimum() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        vm.expectRevert(CrowdFunding.CrowdFunding__ContributionBelowTierMinimum.selector);
+        crowdFunding.contribute(0, 9 * 10**6, 0); //9usdc for reverts, min contribution is 10usdc
+    }
+
+
+    function test_Contribute_RevertIf_TierFull() public {
+    vm.startPrank(creator);
+    CrowdFunding.RewardTier[] memory tiers = new CrowdFunding.RewardTier[](2);
+    tiers[0] = CrowdFunding.RewardTier({
+        name: "Bronze",
+        description: "Basic rewards",
+        minContribution: 10 * 10**6,
+        maxBackers: 2, // only 2 slots for tests
+        currentBackers: 0
+    });
+    tiers[1] = CrowdFunding.RewardTier({
+        name: "Gold",
+        description: "Premium rewards",
+        minContribution: 50 * 10**6,
+        maxBackers: 50,
+        currentBackers: 0
+    });
+    
+    CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+    
+    crowdFunding.createCampaign(
+        "Limited Campaign",
+        CAMPAIGN_GOAL,
+        "Description",
+        30,
+        tiers,
+        milestones
+    );
+    
+    vm.stopPrank();
+    
+    // Contributor 1 - SUCCESS
+    vm.startPrank(contributor1);
+    usdc.approve(address(crowdFunding), 100 * 10**6);
+    crowdFunding.contribute(0, 100 * 10**6, 0);
+    vm.stopPrank();
+    
+    // Contributor 2 - SUCCESS
+    vm.startPrank(contributor2);
+    usdc.approve(address(crowdFunding), 100 * 10**6);
+    crowdFunding.contribute(0, 100 * 10**6, 0);
+    vm.stopPrank();
+    
+    // Contributor 3 - SHOULD REVERT (tier full)
+    address contributor3 = makeAddr("contributor3");
+    usdc.mint(contributor3, INITIAL_BALANCE);
+    
+    vm.startPrank(contributor3);
+    usdc.approve(address(crowdFunding), 100 * 10**6);
+    
+    vm.expectRevert(CrowdFunding.CrowdFunding__TierFull.selector);
+    crowdFunding.contribute(0, 100 * 10**6, 0);
+    
+    vm.stopPrank();
+}
 
 
 
