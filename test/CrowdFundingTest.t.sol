@@ -18,6 +18,7 @@ contract testCrowdFunding is Test {
     uint256 constant INITIAL_BALANCE = 10_000 * 10**6;
     uint256 constant CAMPAIGN_GOAL = 1_000 * 10**6;
     uint256 constant CAMPAIGN_DURATION = 30 days;
+    uint256 constant VALUE_TO_CONTRIBUTE = 100 * 10**6;
 
     function setUp() public {
         owner = address(this);
@@ -392,6 +393,89 @@ contract testCrowdFunding is Test {
             assertEq(milestones[i].approved, false, "approved should be false");
             assertEq(milestones[i].fundsReleased, false, "fundsReleased should be false");
         }
+    }
+
+     // ============================
+    //       CONTRIBUTION FUCNTIONS
+    // ============================
+    
+
+    function testCreatorCantFundOwnCamapign() public {
+        vm.startPrank(creator);
+        
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.expectRevert(CrowdFunding.CrowdFunding__YouCantContributeYourOwnCampaign.selector);
+        crowdFunding.contribute(0,VALUE_TO_CONTRIBUTE, 1);
+        
+        vm.stopPrank();
+
+    }
+
+    function testContributeRevertsCamapignHasEnded() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        vm.warp(31 days);
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignHasEnded.selector);
+        crowdFunding.contribute(0,VALUE_TO_CONTRIBUTE, 1);
+        
+    }
+
+
+    function testContributeRevertsInsufficientAmount() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        vm.expectRevert(CrowdFunding.CrowdFunding__ValueMustBeGreaterThanZero.selector);
+        crowdFunding.contribute(0,0, 1);
+    }
+
+    function testContributeRevertsCampaingDoesNotExist() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignTierDoesNotExist.selector);
+        crowdFunding.contribute(0,VALUE_TO_CONTRIBUTE, 10);
     }
 
 
