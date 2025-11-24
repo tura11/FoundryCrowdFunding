@@ -302,7 +302,7 @@ contract CrowdFunding is ReentrancyGuard {
         if (amount == 0) {
             revert CrowdFunding__ValueMustBeGreaterThanZero();
         }
-        if (tierIndex > campaignTiers[campaignId].length) {
+        if (tierIndex >= campaignTiers[campaignId].length) {
             revert CrowdFunding__CampaignTierDoesNotExist();
         }
 
