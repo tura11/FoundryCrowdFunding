@@ -55,6 +55,8 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__CampaignHasMilestones();
     error CrowdFunding__MilestoneNotFound();
     error CrowdFunding__MilestoneNotApproved();
+    error CrowdFunding__CampaignTierDoesNotExist();
+
 
     // ========== ENUMS & STRUCTS ==========
     
@@ -300,8 +302,8 @@ contract CrowdFunding is ReentrancyGuard {
         if (amount == 0) {
             revert CrowdFunding__ValueMustBeGreaterThanZero();
         }
-        if (tierIndex >= campaignTiers[campaignId].length) {
-            revert CrowdFunding__CampaignDoesNotExist();
+        if (tierIndex > campaignTiers[campaignId].length) {
+            revert CrowdFunding__CampaignTierDoesNotExist();
         }
 
         RewardTier storage tier = campaignTiers[campaignId][tierIndex];
