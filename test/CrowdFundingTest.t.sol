@@ -570,6 +570,7 @@ function testContributeUpdatesState() public {
         vm.stopPrank();
         CrowdFunding.Campaign memory campaignBefore = crowdFunding.getCampaign(0);
         uint256 balanceBefore = campaignBefore.raised;
+        uint256 contributionsBefore = 0;
 
         vm.startPrank(contributor1);
         usdc.approve(address(crowdFunding), VALUE_TO_CONTRIBUTE);
@@ -577,10 +578,12 @@ function testContributeUpdatesState() public {
         vm.stopPrank();
         
         CrowdFunding.Campaign memory campaignAfter = crowdFunding.getCampaign(0);
+        uint256 contributionsAfter = 0 + VALUE_TO_CONTRIBUTE;
         
         assertEq(campaignAfter.raised, balanceBefore + VALUE_TO_CONTRIBUTE);
+        assertEq(contributionsAfter, contributionsBefore + VALUE_TO_CONTRIBUTE);
 
-}
+    }
 
 
 
