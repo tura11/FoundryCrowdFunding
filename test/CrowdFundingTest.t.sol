@@ -624,6 +624,84 @@ function testContributeUpdatesState() public {
     assertEq(crowdFunding.getContributorTier(campaignId, contributor1), 0, "Contributor should be in tier 0");
     }
 
+    function testVoteMilesontesRevertMilestoneNotFound() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), VALUE_TO_CONTRIBUTE);
+        crowdFunding.contribute(0, VALUE_TO_CONTRIBUTE, 0);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneNotFound.selector);
+        crowdFunding.voteMilestone(0, 3, false); //3rd id for revert
+        vm.stopPrank();
+    }
+
+
+    function testVoteMilestonesRevertNotAContributor() public { 
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), VALUE_TO_CONTRIBUTE);
+        crowdFunding.contribute(0, VALUE_TO_CONTRIBUTE, 0);
+        vm.stopPrank();
+        vm.startPrank(contributor2);
+        vm.expectRevert(CrowdFunding.CrowdFunding__NotAContributor.selector);
+        crowdFunding.voteMilestone(0, 0, false);
+    }
+
+
+    function testVoteMilestonesRevertAlreadyVoted() public {
+
+    vm.startPrank(creator);
+    CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+    CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+    crowdFunding.createCampaign(
+        "Test Campaign",
+        CAMPAIGN_GOAL,
+        "Description",
+        30,
+        tiers,
+        milestones
+    );
+    vm.stopPrank();
+
+  
+    vm.startPrank(contributor1);
+    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+    crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+
+    
+    uint256 milestoneDeadline = milestones[0].deadline;
+    vm.warp(milestoneDeadline + 1);
+
+
+    crowdFunding.voteMilestone(0, 0, false);
+
+  
+    vm.expectRevert(CrowdFunding.CrowdFunding__AlreadyVoted.selector);
+    crowdFunding.voteMilestone(0, 0, false);
+    }
+
+
 
 
 
