@@ -783,4 +783,12 @@ contract CrowdFunding is ReentrancyGuard {
     {
         return contributorTiers[campaignId][contributor];
     }
+    function getTotalContributors(uint256 campaignId) 
+        external 
+        view 
+        validateCampaignExists(campaignId) 
+        returns (uint256)
+    {
+        return totalContributors[campaignId];
+    }
 }

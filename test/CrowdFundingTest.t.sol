@@ -585,6 +585,45 @@ function testContributeUpdatesState() public {
 
     }
 
+    function testContributeUpdatesTier() public {
+    vm.startPrank(creator);
+    CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+    CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+    crowdFunding.createCampaign(
+        "Test Campaign",
+        CAMPAIGN_GOAL,
+        "Description",
+        30,
+        tiers,
+        milestones
+    );
+    vm.stopPrank();
+    
+    uint256 campaignId = 0;
+    
+
+    uint256 totalContributorsBefore = crowdFunding.getTotalContributors(campaignId);
+    CrowdFunding.RewardTier[] memory tiersBefore = crowdFunding.getCampaignTiers(campaignId);
+    
+    assertEq(totalContributorsBefore, 0);
+    assertEq(tiersBefore[0].currentBackers, 0);
+    
+
+    vm.startPrank(contributor1);
+    usdc.approve(address(crowdFunding), VALUE_TO_CONTRIBUTE);
+    crowdFunding.contribute(campaignId, VALUE_TO_CONTRIBUTE, 0); // tier index 0
+    vm.stopPrank();
+    
+    uint256 totalContributorsAfter = crowdFunding.getTotalContributors(campaignId);
+    CrowdFunding.RewardTier[] memory tiersAfter = crowdFunding.getCampaignTiers(campaignId);
+    
+
+    assertEq(tiersAfter[0].currentBackers, 1, "Tier 0 should have 1 backer");
+    assertEq(totalContributorsAfter, 1, "Should have 1 total contributor");
+  
+    assertEq(crowdFunding.getContributorTier(campaignId, contributor1), 0, "Contributor should be in tier 0");
+    }
+
 
 
 
