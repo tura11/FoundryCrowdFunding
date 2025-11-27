@@ -701,6 +701,28 @@ function testContributeUpdatesState() public {
     crowdFunding.voteMilestone(0, 0, false);
     }
 
+    function testVoteMilestonesRevertCampaignStillActive() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), VALUE_TO_CONTRIBUTE);
+        crowdFunding.contribute(0, VALUE_TO_CONTRIBUTE, 0);
+        vm.warp(29 days);
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignStillActive.selector);
+        crowdFunding.voteMilestone(0, 0, false);
+
+    }
+
 
 
 
