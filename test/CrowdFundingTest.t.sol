@@ -723,6 +723,49 @@ function testContributeUpdatesState() public {
 
     }
 
+    function testVoteMilestonesRevertNotEnoughMoneyRaised() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), VALUE_TO_CONTRIBUTE);
+        crowdFunding.contribute(0, VALUE_TO_CONTRIBUTE, 0);
+        vm.warp(31 days);
+        vm.expectRevert(CrowdFunding.CrowdFunding__NotEnoughMoneyRaised.selector);
+        crowdFunding.voteMilestone(0, 0, false);
+    }
+
+
+    function testVoteMilestoneRevertMilestoneDeadlineNotReached() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.warp(31 days);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneDeadlineNotReached.selector);
+        crowdFunding.voteMilestone(0, 0, false);
+    }
+
 
 
 
