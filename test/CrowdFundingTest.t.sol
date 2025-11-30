@@ -767,6 +767,68 @@ function testContributeUpdatesState() public {
     }
 
 
+    function testVoteMilestoneRevertIfVotingPeriodExpired() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        
+        // Contributor reaches goal
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.stopPrank();
+        
+        // Warp to AFTER milestone deadline + VOTING_PERIOD (7 days) + 1 second
+        // Milestone deadline: 60 days
+        // Voting ends: 60 days + 7 days = 67 days
+        vm.warp(block.timestamp + 68 days); // 68 days > 67 days voting period
+        
+        vm.startPrank(contributor1);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneVotingPeriodExpired.selector);
+        crowdFunding.voteMilestone(0, 0, true);
+        vm.stopPrank();
+    }
+
+    function testVoteMilestoneInitializesVotingDeadline() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.stopPrank();
+        
+        // ✅ Sprawdź voting deadline przez public mapping
+        uint256 votingDeadlineBefore = crowdFunding.milestoneVotingDeadline(0, 0);
+        assertEq(votingDeadlineBefore, 0, "Voting deadline should be 0 before first vote");
+        
+        vm.warp(block.timestamp + 61 days);
+        
+        vm.prank(contributor1);
+        crowdFunding.voteMilestone(0, 0, true);
+        
+        uint256 votingDeadlineAfter = crowdFunding.milestoneVotingDeadline(0, 0);
+        assertGt(votingDeadlineAfter, 0, "Voting deadline should be initialized");
+    }
 
 
 
