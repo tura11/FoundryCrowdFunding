@@ -477,6 +477,26 @@ contract testCrowdFunding is Test {
         vm.expectRevert(CrowdFunding.CrowdFunding__CampaignTierDoesNotExist.selector);
         crowdFunding.contribute(0,VALUE_TO_CONTRIBUTE, 10);
     }
+    
+    function testContributeRevertsInsufficientAllowance() public {
+        vm.startPrank(creator);
+        CrowdFunding.RewardTier[] memory tiers = _createDefaultTiers();
+        CrowdFunding.Milestone[] memory milestones = _createDefaultMilestones();
+        crowdFunding.createCampaign(
+            "Test Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            30,
+            tiers,
+            milestones
+        );
+        vm.stopPrank();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), 50 * 10**6);
+        vm.expectRevert(CrowdFunding.CrowdFunding__InsufficientAllowance.selector);
+        crowdFunding.contribute(0,100 * 10**6, 1);
+
+    }
 
     function testContributeRevertsContributionBelowTierMinimum() public {
         vm.startPrank(creator);
@@ -817,7 +837,6 @@ function testContributeUpdatesState() public {
         crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
         vm.stopPrank();
         
-        // ✅ Sprawdź voting deadline przez public mapping
         uint256 votingDeadlineBefore = crowdFunding.milestoneVotingDeadline(0, 0);
         assertEq(votingDeadlineBefore, 0, "Voting deadline should be 0 before first vote");
         
