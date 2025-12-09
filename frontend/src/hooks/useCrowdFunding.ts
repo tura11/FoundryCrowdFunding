@@ -1,7 +1,6 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseEther, parseUnits, StopImpersonatingAccountParameters } from 'viem';
+import { parseUnits} from 'viem';
 import { crowdFundingABI  } from '@/constants';
-import { B612_Mono } from 'next/font/google';
 
 
 
@@ -28,7 +27,7 @@ export function useCrowdFunding() {
             name: string,
             description: string,
             minContribution: string,
-            maxBackers: string,
+            maxBackers: number,
         }[],
         milestones:{
             description: string,
@@ -66,6 +65,26 @@ export function useCrowdFunding() {
                 formattedMilestones
             ],
         });
+    };
+
+    const approveUSDC = async (amount:string) => {
+        const USDC_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+         return writeContract({
+            address: USDC_ADDRESS,
+            abi: [
+            {
+                name: 'approve',
+                type: 'function',
+                inputs: [
+                { name: 'spender', type: 'address' },
+                { name: 'amount', type: 'uint256' }
+                ],
+                outputs: [{ type: 'bool' }]
+            }
+            ],
+            functionName: 'approve',
+            args: [CONTRACT_ADDRESS, parseUnits(amount, 6)],
+     });
     };
 
     const contribute = async (
