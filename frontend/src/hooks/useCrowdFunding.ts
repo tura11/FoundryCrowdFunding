@@ -12,7 +12,7 @@ export function useCrowdFunding() {
 
     const {isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
     
-    const {data: camapaignCount, refetch: refetchCount} = useReadContract({
+    const {data: campaignCount, refetch: refetchCount} = useReadContract({
         abi: crowdFundingABI,
         address: CONTRACT_ADDRESS,
         functionName: 'getCampaignCount',
@@ -81,6 +81,26 @@ export function useCrowdFunding() {
         });
     };
 
-       
 
+    const useCampaign = (id: number) => {
+        return useReadContract({
+            abi: crowdFundingABI,
+            address: CONTRACT_ADDRESS,
+            functionName: 'getCampaign',
+            args: [BigInt(id)],
+        });
+    };
+
+    return {
+        campaignCount,
+        createCampaign,
+        contribute,
+        useCampaign,
+        isConfirming,
+        isConfirmed,
+        isPending,
+        error,
+        refetchCount
+    }
+    
 }
