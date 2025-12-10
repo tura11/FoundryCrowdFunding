@@ -12,8 +12,8 @@ export function useCrowdFunding() {
     const {isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
     
     const {data: campaignCount, refetch: refetchCount} = useReadContract({
-        abi: crowdFundingABI,
         address: CONTRACT_ADDRESS,
+        abi: crowdFundingABI,
         functionName: 'getCampaignCount',
     });
 
