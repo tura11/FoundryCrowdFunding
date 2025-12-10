@@ -16,13 +16,13 @@ export default function Home() {
     error 
   } = useCrowdFunding();
 
-
+  // Form state - podstawowe dane
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [goal, setGoal] = useState('');
   const [duration, setDuration] = useState('30');
 
-
+  // Reset po stworzeniu
   useEffect(() => {
     if (isConfirmed) {
       setTitle('');
@@ -42,7 +42,7 @@ export default function Home() {
     }
 
     try {
-
+      // Proste tier i milestone dla testu
       const defaultTiers = [
         {
           name: 'Bronze',
