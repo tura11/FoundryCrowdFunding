@@ -1,13 +1,13 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits} from 'viem';
-import { crowdFundingABI  } from '@/constants';
+import { crowdFundingABI } from '../crowdFundingABI';
 
 
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
 
 export function useCrowdFunding() {
-    const {writeContract, data: hash, isPending, error} = useWriteContract();
+    const {writeContract, data: hash, isPending, error} = useWriteContract()
 
     const {isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
     
@@ -115,6 +115,7 @@ export function useCrowdFunding() {
         createCampaign,
         contribute,
         useCampaign,
+        approveUSDC,
         isConfirming,
         isConfirmed,
         isPending,
