@@ -2,258 +2,235 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useCrowdFunding } from '@/hooks/useCrowdFunding';
-import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import Link from 'next/link';
+import { formatUnits } from 'viem';
+import { Rocket, Plus, TrendingUp, Clock, Target, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
-  const { isConnected, address } = useAccount();
-  const { 
-    campaignCount,
-    createCampaign,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    error 
-  } = useCrowdFunding();
+  const { isConnected } = useAccount();
+  const { campaignCount } = useCrowdFunding();
+  const [mounted, setMounted] = useState(false);
 
-  // Form state - podstawowe dane
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [goal, setGoal] = useState('');
-  const [duration, setDuration] = useState('30');
-
-  // Reset po stworzeniu
   useEffect(() => {
-    if (isConfirmed) {
-      setTitle('');
-      setDescription('');
-      setGoal('');
-      setDuration('30');
-      alert('✅ Campaign created successfully!');
-    }
-  }, [isConfirmed]);
+    setMounted(true);
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!isConnected) {
-      alert('Connect your wallet first!');
-      return;
-    }
+  const campaignIds = campaignCount 
+    ? Array.from({ length: Number(campaignCount) }, (_, i) => i)
+    : [];
 
-    try {
-      // Proste tier i milestone dla testu
-      const defaultTiers = [
-        {
-          name: 'Bronze',
-          description: 'Basic supporter',
-          minContribution: '10', // 10 USDC
-          maxBackers: 100
-        }
-      ];
-
-      const now = Math.floor(Date.now() / 1000);
-      const campaignEndTime = now + (parseInt(duration) * 24 * 60 * 60);
-      
-      const defaultMilestones = [
-        {
-          description: 'First milestone',
-          percentage: 50,
-          deadline: campaignEndTime + (30 * 24 * 60 * 60) // 30 dni po końcu
-        },
-        {
-          description: 'Final milestone',
-          percentage: 50,
-          deadline: campaignEndTime + (60 * 24 * 60 * 60) // 60 dni po końcu
-        }
-      ];
-
-      await createCampaign(
-        title,
-        goal,
-        description,
-        parseInt(duration),
-        defaultTiers,
-        defaultMilestones
-      );
-    } catch (err: any) {
-      console.error('Error creating campaign:', err);
-      alert('Error: ' + (err?.message || 'Unknown error'));
-    }
-  };
+  // Don't render until mounted to avoid hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center">
+        <div className="text-white text-2xl font-bold">Loading...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 p-8">
-      <div className="max-w-6xl mx-auto">
-        
-        {/* Header */}
-        <div className="flex justify-between items-center mb-12">
-          <div>
-            <h1 className="text-5xl font-bold text-white mb-2">
-              🚀 CrowdFunding DApp
-            </h1>
-            <p className="text-white/80 text-lg">
-              Total Campaigns: {campaignCount?.toString() || '0'}
-            </p>
-            {isConnected && (
-              <p className="text-white/60 text-sm mt-1">
-                Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
-              </p>
-            )}
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400">
+      
+      {/* Header */}
+      <div className="border-b border-white/20 backdrop-blur-sm bg-white/10">
+        <div className="max-w-7xl mx-auto px-8 py-6">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <Rocket className="w-10 h-10 text-white" />
+              <div>
+                <h1 className="text-3xl font-bold text-white">
+                  🚀 CrowdFunding DApp
+                </h1>
+                <p className="text-white/80 text-sm">
+                  Total Campaigns: {campaignCount?.toString() || '0'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              {isConnected && (
+                <Link
+                  href="/create"
+                  className="flex items-center gap-2 px-6 py-3 bg-white text-purple-600 font-bold rounded-xl hover:bg-gray-100 transition-all shadow-lg hover:scale-105"
+                >
+                  <Plus className="w-5 h-5" />
+                  Create Campaign
+                </Link>
+              )}
+              <ConnectButton />
+            </div>
           </div>
-          <ConnectButton />
         </div>
+      </div>
 
-        {/* Create Campaign Form */}
-        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8">
-          <h2 className="text-3xl font-bold mb-6 text-gray-800">
-            ✨ Create New Campaign
-          </h2>
-          
-          {!isConnected && (
-            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-6">
-              <p className="text-yellow-800 font-medium">
-                ⚠️ Please connect your wallet to create a campaign
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-8 py-12">
+        
+        {/* Empty State */}
+        {campaignIds.length === 0 && (
+          <div className="text-center py-20">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-12 max-w-2xl mx-auto">
+              <Rocket className="w-20 h-20 text-purple-500 mx-auto mb-6" />
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">
+                No Campaigns Yet
+              </h2>
+              <p className="text-gray-600 mb-8">
+                Be the first to create a crowdfunding campaign!
               </p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Campaign Title *
-              </label>
-              <input
-                type="text"
-                placeholder="My Awesome Project"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-gray-900 transition-colors"
-                required
-                disabled={isPending || isConfirming}
-                maxLength={200}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {title.length}/200 characters
-              </p>
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Description *
-              </label>
-              <textarea
-                placeholder="Tell people about your project..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none resize-none text-gray-900 transition-colors"
-                rows={4}
-                required
-                disabled={isPending || isConfirming}
-                maxLength={200}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {description.length}/200 characters
-              </p>
-            </div>
-
-            {/* Goal & Duration */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Goal (USDC) *
-                </label>
-                <input
-                  type="number"
-                  placeholder="1000"
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-gray-900 transition-colors"
-                  required
-                  min="100"
-                  step="0.01"
-                  disabled={isPending || isConfirming}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Minimum: 100 USDC
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Duration (days) *
-                </label>
-                <input
-                  type="number"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-gray-900 transition-colors"
-                  required
-                  min="1"
-                  max="365"
-                  disabled={isPending || isConfirming}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Max: 365 days
-                </p>
+              
+              {/* Fixed: Always show button/message, just change content */}
+              <div className="min-h-[60px] flex items-center justify-center">
+                {isConnected ? (
+                  <Link
+                    href="/create"
+                    className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Create First Campaign
+                  </Link>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-gray-500 mb-4">Connect your wallet to get started</p>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Info Box */}
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-              <p className="text-blue-800 text-sm">
-                ℹ️ <strong>Note:</strong> This will create a campaign with default Bronze tier (10 USDC min) 
-                and 2 milestones (50% each). You can customize tiers later.
-              </p>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
-                <p className="text-red-600 text-sm font-medium">
-                  ❌ Error: {error.message}
-                </p>
-              </div>
-            )}
-
-            {/* Success */}
-            {isConfirmed && (
-              <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-                <p className="text-green-600 text-sm font-medium">
-                  ✅ Campaign created successfully!
-                </p>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={!isConnected || isPending || isConfirming}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-bold text-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
-            >
-              {isPending && '⏳ Preparing transaction...'}
-              {isConfirming && '⏳ Confirming on blockchain...'}
-              {!isPending && !isConfirming && !isConnected && '🔒 Connect Wallet First'}
-              {!isPending && !isConfirming && isConnected && '🚀 Create Campaign'}
-            </button>
-          </form>
-        </div>
-
-        {/* Debug Info (tylko dla development) */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-8 bg-gray-800 rounded-xl p-4 text-white text-xs font-mono">
-            <p><strong>Debug Info:</strong></p>
-            <p>Connected: {isConnected ? 'Yes' : 'No'}</p>
-            <p>Address: {address || 'N/A'}</p>
-            <p>Campaign Count: {campaignCount?.toString() || 'Loading...'}</p>
-            <p>Contract: {process.env.NEXT_PUBLIC_CONTRACT_ADDRESS}</p>
-            <p>USDC: {process.env.NEXT_PUBLIC_USDC_ADDRESS}</p>
           </div>
         )}
 
+        {/* Campaign Grid */}
+        {campaignIds.length > 0 && (
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-8">
+              🔥 Active Campaigns
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {campaignIds.map((id) => (
+                <CampaignCard key={id} campaignId={id} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function CampaignCard({ campaignId }: { campaignId: number }) {
+  const { useCampaign } = useCrowdFunding();
+  const { data: campaign, isLoading } = useCampaign(campaignId);
+
+  if (isLoading) {
+    return (
+      <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 animate-pulse">
+        <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+        <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+        <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+      </div>
+    );
+  }
+
+  if (!campaign) return null;
+
+  // Safe data extraction with fallbacks
+  const campaignData = campaign as any;
+  const title = campaignData.title || campaignData[0] || 'Untitled Campaign';
+  const goal = campaignData.goal || campaignData[1] || BigInt(0);
+  const raised = campaignData.raised || campaignData[2] || BigInt(0);
+  const duration = campaignData.duration || campaignData[3] || BigInt(0);
+  const description = campaignData.description || campaignData[4] || 'No description available';
+  const creator = campaignData.creator || campaignData[5] || '0x0000000000000000000000000000000000000000';
+  const state = campaignData.state !== undefined ? campaignData.state : (campaignData[6] !== undefined ? campaignData[6] : 0);
+  
+  // Validate data before formatting
+  if (!goal || !raised || !duration || !creator) {
+    console.error('Invalid campaign data:', campaignData);
+    return null;
+  }
+  
+  const progress = Number(raised) > 0 ? (Number(raised) / Number(goal)) * 100 : 0;
+  const goalFormatted = formatUnits(goal, 6);
+  const raisedFormatted = formatUnits(raised, 6);
+  
+  const durationDate = new Date(Number(duration) * 1000);
+  const now = new Date();
+  const daysLeft = Math.max(0, Math.ceil((durationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  const isActive = now < durationDate;
+
+  const stateText = state === 0 ? 'Active' : state === 1 ? 'Successful' : 'Failed';
+  const stateColor = state === 0 ? 'bg-green-500' : state === 1 ? 'bg-blue-500' : 'bg-red-500';
+
+  return (
+    <Link href={`/campaign/${campaignId}`}>
+      <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:scale-[1.02] cursor-pointer overflow-hidden group">
+        
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-start justify-between mb-3">
+            <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 transition-colors line-clamp-2">
+              {title}
+            </h3>
+            <span className={`${stateColor} text-white text-xs px-3 py-1 rounded-full font-semibold`}>
+              {stateText}
+            </span>
+          </div>
+          
+          <p className="text-gray-600 text-sm line-clamp-2 mb-4">
+            {description}
+          </p>
+
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <Users className="w-4 h-4" />
+            <span className="font-mono">{creator.slice(0, 6)}...{creator.slice(-4)}</span>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="mb-4">
+            <div className="flex justify-between text-sm font-semibold mb-2">
+              <span className="text-gray-700">{raisedFormatted} USDC</span>
+              <span className="text-gray-500">{goalFormatted} USDC</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
+                style={{ width: `${Math.min(progress, 100)}%` }}
+              />
+            </div>
+            <div className="text-right text-xs text-gray-500 mt-1">
+              {progress.toFixed(1)}% funded
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-2 text-gray-700">
+              <Clock className="w-4 h-4 text-purple-500" />
+              <div>
+                <p className="text-xs text-gray-500">Time left</p>
+                <p className="font-semibold text-sm">
+                  {isActive ? `${daysLeft} days` : 'Ended'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 text-gray-700">
+              <Target className="w-4 h-4 text-pink-500" />
+              <div>
+                <p className="text-xs text-gray-500">Goal</p>
+                <p className="font-semibold text-sm">{goalFormatted} USDC</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+          <div className="text-sm text-purple-600 font-semibold group-hover:text-purple-700 flex items-center gap-2">
+            View Details
+            <TrendingUp className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+      </div>
+    </Link>
   );
 }
