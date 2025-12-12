@@ -110,7 +110,6 @@ export function useCrowdFunding() {
     });
   };
 
-  // ← DODAJ TE DWA
   const useCampaignTiers = (campaignId: number) => {
     return useReadContract({
       abi: crowdFundingABI,
@@ -135,8 +134,8 @@ export function useCrowdFunding() {
     contribute,
     approveUSDC,
     useCampaign,
-    useCampaignTiers,       // ← RETURN
-    useCampaignMilestones,  // ← RETURN
+    useCampaignTiers,      
+    useCampaignMilestones,  
     isPending,
     isConfirming,
     isConfirmed,
