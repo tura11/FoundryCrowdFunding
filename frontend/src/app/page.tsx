@@ -31,8 +31,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      
-      {/* Kickstarter-style Header */}
+      {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -69,7 +68,7 @@ export default function Home() {
             Bring creative projects to life
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Back campaigns you believe in. Connect with creators. Make something awesome happen.
+            Create campaigns you believe in. Connect with creators. Make something awesome happen.
           </p>
           {isConnected && (
             <Link

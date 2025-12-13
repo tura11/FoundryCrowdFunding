@@ -2,13 +2,13 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useCrowdFunding } from '@/hooks/useCrowdFunding';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import Link from 'next/link';
 import { formatUnits } from 'viem';
 import { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Target, Clock, Users, TrendingUp, 
-  Coins, Award, CheckCircle, AlertCircle, Loader, Heart
+  Coins, Award, CheckCircle, AlertCircle, Loader, Heart, Wallet
 } from 'lucide-react';
 
 export default function ClientCampaignDetail({ campaignId }: { campaignId: number }) {
@@ -32,8 +32,31 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
   const [contributionAmount, setContributionAmount] = useState('');
   const [selectedTier, setSelectedTier] = useState(0);
-  const [step, setStep] = useState<'idle' | 'approving' | 'contributing'>('idle');
+  const [step, setStep] = useState<'idle' | 'needsApproval' | 'approved' | 'contributing'>('idle');
   const [savedImage, setSavedImage] = useState<string | null>(null);
+  const [mintingUSDC, setMintingUSDC] = useState(false);
+
+  const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`;
+
+  // Get user's USDC balance
+  const { data: usdcBalance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: [
+      {
+        name: 'balanceOf',
+        type: 'function',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }],
+        stateMutability: 'view'
+      }
+    ],
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address,
+      refetchInterval: 5000
+    }
+  });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -43,12 +66,22 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
   }, [campaignId]);
 
   useEffect(() => {
-    if (isConfirmed) {
-      setContributionAmount('');
-      setStep('idle');
-      alert('✅ Contribution successful!');
+    if (!isPending && !isConfirming && isConfirmed) {
+      if (step === 'needsApproval') {
+        console.log('Approval confirmed, switching to approved state');
+        setStep('approved');
+      } else if (step === 'contributing') {
+        console.log('Contribution confirmed, refreshing...');
+        setContributionAmount('');
+        setSelectedTier(0);
+        setStep('idle');
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      }
     }
-  }, [isConfirmed]);
+  }, [isConfirmed, isPending, isConfirming, step]);
 
   if (campaignLoading || tiersLoading || milestonesLoading) {
     return (
@@ -88,6 +121,8 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
   const isCreator = address?.toLowerCase() === creator.toLowerCase();
 
   const handleContribute = async () => {
+    console.log('handleContribute called, current step:', step);
+    
     if (!isConnected) {
       alert('Connect wallet first!');
       return;
@@ -98,23 +133,67 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       return;
     }
 
+    if (tiers && Array.isArray(tiers) && tiers[selectedTier]) {
+      const selectedTierData = tiers[selectedTier] as any;
+      const minRequired = parseFloat(formatUnits(selectedTierData.minContribution, 6));
+      if (parseFloat(contributionAmount) < minRequired) {
+        alert(`Minimum contribution for this tier is $${minRequired}`);
+        return;
+      }
+    }
+
     try {
-      setStep('approving');
-      await approveUSDC(contributionAmount);
+      if (step === 'idle') {
+        console.log('Starting approval...');
+        setStep('needsApproval');
+        await approveUSDC(contributionAmount);
+      } else if (step === 'approved') {
+        console.log('Starting contribution...');
+        setStep('contributing');
+        await contribute(campaignId, contributionAmount, selectedTier);
+      }
+    } catch (err: any) {
+      console.error('Transaction error:', err);
+      alert(`Error: ${err.message || 'Transaction failed'}`);
+      setStep('idle');
+    }
+  };
+
+  const handleMintUSDC = async () => {
+    if (!isConnected || !address) {
+      alert('Connect wallet first!');
+      return;
+    }
+
+    try {
+      setMintingUSDC(true);
       
-      setStep('contributing');
-      await contribute(campaignId, contributionAmount, selectedTier);
+      const amount = (BigInt(10000) * BigInt(1000000)).toString(16).padStart(64, '0');
+      const addressPadded = address.slice(2).padStart(64, '0');
+
+      const tx = await (window as any).ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: USDC_ADDRESS,
+          data: '0x40c10f19' + addressPadded + amount
+        }]
+      });
+
+      console.log('Mint transaction:', tx);
+      alert('✅ Success! 10,000 USDC minted to your wallet');
       
     } catch (err: any) {
-      console.error('Contribution error:', err);
-      setStep('idle');
+      console.error('Mint error:', err);
+      alert(`Error: ${err.message || 'Minting failed'}`);
+    } finally {
+      setMintingUSDC(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -125,19 +204,29 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               <ArrowLeft className="w-5 h-5" />
               Back to projects
             </Link>
-            <ConnectButton />
+            <div className="flex items-center gap-4">
+              {isConnected && usdcBalance !== undefined && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                  <Wallet className="w-4 h-4 text-green-600" />
+                  <div className="text-sm">
+                    <span className="font-bold text-green-900">
+                      ${Number(formatUnits(usdcBalance, 6)).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-green-600 ml-1">USDC</span>
+                  </div>
+                </div>
+              )}
+              <ConnectButton />
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           
-          {/* Left Column - Campaign Info */}
           <div className="lg:col-span-2 space-y-8">
             
-            {/* Hero Image */}
             <div className="relative h-96 rounded-lg overflow-hidden bg-gradient-to-br from-green-400 to-emerald-600">
               {savedImage ? (
                 <img 
@@ -159,7 +248,6 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               )}
             </div>
 
-            {/* Campaign Header */}
             <div>
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
                 {title}
@@ -183,10 +271,8 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               </div>
             </div>
 
-            {/* Divider */}
             <div className="border-t border-gray-200"></div>
 
-            {/* Tiers */}
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Rewards</h2>
               
@@ -228,10 +314,8 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               </div>
             </div>
 
-            {/* Divider */}
             <div className="border-t border-gray-200"></div>
 
-            {/* Milestones */}
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Milestones</h2>
               
@@ -281,11 +365,9 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
             </div>
           </div>
 
-          {/* Right Column - Funding Box */}
           <div className="lg:col-span-1">
             <div className="bg-white border border-gray-200 rounded-lg p-6 sticky top-24">
               
-              {/* Funding Stats */}
               <div className="mb-6">
                 <div className="text-3xl font-bold text-gray-900 mb-1">
                   ${Number(raisedFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}
@@ -294,7 +376,6 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                   pledged of ${Number(goalFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })} goal
                 </div>
 
-                {/* Progress Bar */}
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
                   <div 
                     className="bg-green-500 h-2 rounded-full transition-all duration-500"
@@ -302,7 +383,6 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                   />
                 </div>
 
-                {/* Stats Grid */}
                 <div className="space-y-3">
                   <div>
                     <div className="text-2xl font-bold text-gray-900">{progress.toFixed(0)}%</div>
@@ -315,10 +395,8 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                 </div>
               </div>
 
-              {/* Divider */}
               <div className="border-t border-gray-200 mb-6"></div>
 
-              {/* Contribute Section */}
               {!isActive && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
                   <p className="text-gray-700 text-sm text-center font-medium">
@@ -335,12 +413,37 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                 </div>
               )}
 
+              {isConnected && (
+                <div className="mb-4">
+                  <button
+                    onClick={handleMintUSDC}
+                    disabled={mintingUSDC}
+                    className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    {mintingUSDC ? '⏳ Minting...' : '🎁 Get 10,000 Test USDC'}
+                  </button>
+                  <p className="text-xs text-gray-500 text-center mt-2">
+                    For testing purposes only (Anvil network)
+                  </p>
+                </div>
+              )}
+
               {isActive && !isCreator && (
                 <>
+                  {step === 'approved' && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-start gap-3">
+                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-green-800">USDC Approved!</p>
+                        <p className="text-sm text-green-700">Click the button below to complete your contribution</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-4 mb-6">
                     <div>
                       <label className="block text-sm font-bold text-gray-900 mb-2">
-                        Pledge amount
+                        Pledge amount (USDC)
                       </label>
                       <div className="relative">
                         <span className="absolute left-4 top-3 text-gray-500 font-medium">$</span>
@@ -355,7 +458,11 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                           disabled={isPending || isConfirming}
                         />
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Minimum: $10</p>
+                      {tiers && Array.isArray(tiers) && tiers[selectedTier] && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Minimum for this tier: ${formatUnits((tiers[selectedTier] as any).minContribution, 6)}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -368,11 +475,14 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
                         disabled={isPending || isConfirming}
                       >
-                        {Array.isArray(tiers) && tiers.map((tier: any, idx: number) => (
-                          <option key={idx} value={idx}>
-                            {tier.name} - ${formatUnits(tier.minContribution, 6)}+
-                          </option>
-                        ))}
+                        {Array.isArray(tiers) && tiers.map((tier: any, idx: number) => {
+                          const spotsLeft = Number(tier.maxBackers) - Number(tier.currentBackers);
+                          return (
+                            <option key={idx} value={idx} disabled={spotsLeft <= 0}>
+                              {tier.name} - ${formatUnits(tier.minContribution, 6)}+ {spotsLeft <= 0 ? '(Full)' : `(${spotsLeft} left)`}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
@@ -402,10 +512,13 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                     disabled={!isConnected || isPending || isConfirming || !contributionAmount}
                     className="w-full bg-green-500 text-white py-4 rounded-full font-bold text-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    {step === 'approving' && '⏳ Approving...'}
-                    {step === 'contributing' && '⏳ Confirming...'}
-                    {step === 'idle' && !isConnected && '🔒 Connect wallet'}
-                    {step === 'idle' && isConnected && 'Back this project'}
+                    {isPending && '⏳ Confirm in wallet...'}
+                    {!isPending && isConfirming && step === 'needsApproval' && '⏳ Approving USDC...'}
+                    {!isPending && isConfirming && step === 'contributing' && '⏳ Contributing...'}
+                    {!isPending && !isConfirming && step === 'approved' && '✓ Click to contribute'}
+                    {!isPending && !isConfirming && step === 'idle' && !isConnected && '🔒 Connect wallet'}
+                    {!isPending && !isConfirming && step === 'idle' && isConnected && 'Back this project'}
+                    {!isPending && !isConfirming && step === 'needsApproval' && 'Approve USDC'}
                   </button>
 
                   <p className="text-center text-xs text-gray-500 mt-4">
