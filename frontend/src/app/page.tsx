@@ -32,7 +32,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* Header */}
+      {/* Kickstarter-style Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -171,6 +171,16 @@ export default function Home() {
 function CampaignCard({ campaignId }: { campaignId: number }) {
   const { useCampaign } = useCrowdFunding();
   const { data: campaign, isLoading } = useCampaign(campaignId);
+  
+  // Get saved image from localStorage
+  const [savedImage, setSavedImage] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const img = localStorage.getItem(`campaign-${campaignId}-image`);
+      setSavedImage(img);
+    }
+  }, [campaignId]);
 
   if (isLoading) {
     return (
@@ -209,12 +219,22 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
     <Link href={`/campaign/${campaignId}`} className="group">
       <article className="bg-white rounded-lg overflow-hidden border border-gray-200 hover:shadow-xl transition-all duration-300">
         
-        {/* Image Placeholder */}
-        <div className="relative h-64 bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center overflow-hidden">
+        {/* Image - Use saved image or gradient placeholder */}
+        <div className="relative h-64 overflow-hidden">
+          {savedImage ? (
+            <img 
+              src={savedImage} 
+              alt={title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
+              <div className="text-white text-6xl font-bold opacity-20">
+                {title.charAt(0).toUpperCase()}
+              </div>
+            </div>
+          )}
           <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity"></div>
-          <div className="text-white text-6xl font-bold opacity-20">
-            {title.charAt(0).toUpperCase()}
-          </div>
           {state === 1 && (
             <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold">
               ✓ Funded
@@ -240,29 +260,41 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
 
           {/* Progress */}
           <div className="mb-4">
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+            {/* Goal nad paskiem po prawej */}
+            <div className="flex justify-between items-end mb-2">
+              <div>
+                <div className="text-2xl font-bold text-gray-900">
+                  ${Number(raisedFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                </div>
+                <div className="text-sm text-gray-500">
+                  pledged
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-bold text-gray-700">
+                  ${Number(goalFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                </div>
+                <div className="text-sm text-gray-500">
+                  goal
+                </div>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
               <div 
                 className="bg-green-500 h-2 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(progress, 100)}%` }}
               />
             </div>
             
-            <div className="flex justify-between items-end">
-              <div>
-                <div className="text-2xl font-bold text-gray-900">
-                  ${raisedFormatted}
-                </div>
-                <div className="text-sm text-gray-500">
-                  pledged of ${goalFormatted} goal
-                </div>
+            {/* Stats row */}
+            <div className="flex justify-between items-center text-sm">
+              <div className="text-gray-600">
+                <span className="font-bold text-gray-900">{progress.toFixed(0)}%</span> funded
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900">
-                  {daysLeft}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {isActive ? 'days to go' : 'ended'}
-                </div>
+              <div className="text-gray-600">
+                <span className="font-bold text-gray-900">{daysLeft}</span> {isActive ? 'days to go' : 'ended'}
               </div>
             </div>
           </div>
