@@ -31,7 +31,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      
+      {/* Kickstarter-style Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -68,7 +69,7 @@ export default function Home() {
             Bring creative projects to life
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Create campaigns you believe in. Connect with creators. Make something awesome happen.
+            Back campaigns you believe in. Connect with creators. Make something awesome happen.
           </p>
           {isConnected && (
             <Link
@@ -218,7 +219,7 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
     <Link href={`/campaign/${campaignId}`} className="group">
       <article className="bg-white rounded-lg overflow-hidden border border-gray-200 hover:shadow-xl transition-all duration-300">
         
-        {/* Image - Use saved image or gradient placeholder */}
+        {/* Image - FIXED: Always show gradient if no savedImage */}
         <div className="relative h-64 overflow-hidden">
           {savedImage ? (
             <img 
@@ -229,7 +230,7 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
               <div className="text-white text-6xl font-bold opacity-20">
-                {title.charAt(0).toUpperCase()}
+                {title?.charAt(0)?.toUpperCase() || '?'}
               </div>
             </div>
           )}
