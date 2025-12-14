@@ -6,7 +6,20 @@ import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Upload, X, Image as ImageIcon, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Upload, X, Image as ImageIcon, CheckCircle, AlertCircle, Plus, Trash2 } from 'lucide-react';
+
+interface Tier {
+  name: string;
+  description: string;
+  minContribution: string;
+  maxBackers: number;
+}
+
+interface Milestone {
+  description: string;
+  percentage: number;
+  deadline: number;
+}
 
 export default function CreateCampaign() {
   const router = useRouter();
@@ -27,32 +40,40 @@ export default function CreateCampaign() {
   const [imageUrl, setImageUrl] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+  // ✨ NOWE - Edytowalne tiers
+  const [tiers, setTiers] = useState<Tier[]>([
+    {
+      name: 'Bronze Supporter',
+      description: 'Basic supporter tier',
+      minContribution: '10',
+      maxBackers: 100
+    }
+  ]);
+
+  // ✨ NOWE - Edytowalne milestones
+  const [milestones, setMilestones] = useState([
+    { description: 'First milestone', percentage: 50, daysAfterEnd: 30 },
+    { description: 'Final milestone', percentage: 50, daysAfterEnd: 60 }
+  ]);
+
   useEffect(() => {
     if (isConfirmed && imageUrl) {
-      // Save image to localStorage for the new campaign
-      // Campaign ID will be current count
       const newCampaignId = Number(campaignCount || 0);
       localStorage.setItem(`campaign-${newCampaignId}-image`, imageUrl);
-      
-      setTimeout(() => {
-        router.push('/');
-      }, 2000);
+      setTimeout(() => router.push('/'), 2000);
     } else if (isConfirmed) {
-      setTimeout(() => {
-        router.push('/');
-      }, 2000);
+      setTimeout(() => router.push('/'), 2000);
     }
-  }, [isConfirmed, imageUrl, router]);
+  }, [isConfirmed, imageUrl, router, campaignCount]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Create preview AND data URL
       const reader = new FileReader();
       reader.onloadend = () => {
         const dataUrl = reader.result as string;
         setImagePreview(dataUrl);
-        setImageUrl(dataUrl); // ← Use actual uploaded image!
+        setImageUrl(dataUrl);
       };
       reader.readAsDataURL(file);
     }
@@ -63,6 +84,61 @@ export default function CreateCampaign() {
     setImageUrl('');
   };
 
+  // ✨ Tier handlers
+  const addTier = () => {
+    if (tiers.length >= 5) {
+      alert('Maximum 5 tiers allowed');
+      return;
+    }
+    setTiers([...tiers, {
+      name: `Tier ${tiers.length + 1}`,
+      description: '',
+      minContribution: '10',
+      maxBackers: 50
+    }]);
+  };
+
+  const removeTier = (index: number) => {
+    if (tiers.length <= 1) {
+      alert('At least 1 tier required');
+      return;
+    }
+    setTiers(tiers.filter((_, i) => i !== index));
+  };
+
+  const updateTier = (index: number, field: keyof Tier, value: string | number) => {
+    const newTiers = [...tiers];
+    newTiers[index] = { ...newTiers[index], [field]: value };
+    setTiers(newTiers);
+  };
+
+  // ✨ Milestone handlers
+  const addMilestone = () => {
+    if (milestones.length >= 5) {
+      alert('Maximum 5 milestones allowed');
+      return;
+    }
+    setMilestones([...milestones, {
+      description: `Milestone ${milestones.length + 1}`,
+      percentage: 0,
+      daysAfterEnd: 30
+    }]);
+  };
+
+  const removeMilestone = (index: number) => {
+    if (milestones.length <= 2) {
+      alert('At least 2 milestones required');
+      return;
+    }
+    setMilestones(milestones.filter((_, i) => i !== index));
+  };
+
+  const updateMilestone = (index: number, field: string, value: string | number) => {
+    const newMilestones = [...milestones];
+    newMilestones[index] = { ...newMilestones[index], [field]: value };
+    setMilestones(newMilestones);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -71,39 +147,30 @@ export default function CreateCampaign() {
       return;
     }
 
-    try {
-      const defaultTiers = [
-        {
-          name: 'Bronze Supporter',
-          description: 'Basic supporter tier',
-          minContribution: '10',
-          maxBackers: 100
-        }
-      ];
+    // Validate milestones sum to 100%
+    const totalPercentage = milestones.reduce((sum, m) => sum + Number(m.percentage), 0);
+    if (totalPercentage !== 100) {
+      alert(`Milestones must sum to 100% (currently ${totalPercentage}%)`);
+      return;
+    }
 
+    try {
       const now = Math.floor(Date.now() / 1000);
       const campaignEndTime = now + (parseInt(duration) * 24 * 60 * 60);
       
-      const defaultMilestones = [
-        {
-          description: 'First milestone - 50%',
-          percentage: 50,
-          deadline: campaignEndTime + (30 * 24 * 60 * 60)
-        },
-        {
-          description: 'Final milestone - 50%',
-          percentage: 50,
-          deadline: campaignEndTime + (60 * 24 * 60 * 60)
-        }
-      ];
+      const formattedMilestones = milestones.map(m => ({
+        description: m.description,
+        percentage: Number(m.percentage),
+        deadline: campaignEndTime + (Number(m.daysAfterEnd) * 24 * 60 * 60)
+      }));
 
       await createCampaign(
         title,
         goal,
         description,
         parseInt(duration),
-        defaultTiers,
-        defaultMilestones
+        tiers,
+        formattedMilestones
       );
     } catch (err: any) {
       console.error('Error creating campaign:', err);
@@ -113,7 +180,6 @@ export default function CreateCampaign() {
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -129,10 +195,8 @@ export default function CreateCampaign() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-4xl mx-auto px-6 py-12">
         
-        {/* Page Title */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Start a project
@@ -142,17 +206,16 @@ export default function CreateCampaign() {
           </p>
         </div>
 
-        {/* Form Card */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
             
-            {/* Project Image */}
+            {/* Image Upload (bez zmian) */}
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-3">
-                Project image *
+                Project image
               </label>
               <p className="text-sm text-gray-600 mb-4">
-                Upload an image that represents your project (optional for demo)
+                Upload an image that represents your project (optional)
               </p>
               
               {!imagePreview ? (
@@ -192,14 +255,12 @@ export default function CreateCampaign() {
               )}
             </div>
 
-            {/* Divider */}
             <div className="border-t border-gray-200"></div>
 
-            {/* Project Basics */}
+            {/* Basic Info (bez zmian) */}
             <div className="space-y-6">
               <h3 className="text-lg font-bold text-gray-900">Project basics</h3>
 
-              {/* Title */}
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-2">
                   Project title *
@@ -219,7 +280,6 @@ export default function CreateCampaign() {
                 </p>
               </div>
 
-              {/* Description */}
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-2">
                   Project description *
@@ -240,7 +300,6 @@ export default function CreateCampaign() {
               </div>
             </div>
 
-            {/* Divider */}
             <div className="border-t border-gray-200"></div>
 
             {/* Funding */}
@@ -248,7 +307,6 @@ export default function CreateCampaign() {
               <h3 className="text-lg font-bold text-gray-900">Funding</h3>
 
               <div className="grid grid-cols-2 gap-6">
-                {/* Goal */}
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-2">
                     Funding goal (USDC) *
@@ -272,7 +330,6 @@ export default function CreateCampaign() {
                   </p>
                 </div>
 
-                {/* Duration */}
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-2">
                     Campaign duration (days) *
@@ -294,22 +351,184 @@ export default function CreateCampaign() {
               </div>
             </div>
 
+            <div className="border-t border-gray-200"></div>
+
+            {/* ✨ REWARD TIERS - EDITABLE */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-bold text-gray-900">Reward Tiers</h3>
+                <button
+                  type="button"
+                  onClick={addTier}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                  disabled={tiers.length >= 5}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Tier
+                </button>
+              </div>
+
+              {tiers.map((tier, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-gray-700">Tier {index + 1}</span>
+                    {tiers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeTier(index)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="Tier name"
+                    value={tier.name}
+                    onChange={(e) => updateTier(index, 'name', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+                    maxLength={200}
+                  />
+
+                  <textarea
+                    placeholder="Tier description"
+                    value={tier.description}
+                    onChange={(e) => updateTier(index, 'description', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+                    rows={2}
+                    maxLength={200}
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Min Contribution ($)
+                      </label>
+                      <input
+                        type="number"
+                        value={tier.minContribution}
+                        onChange={(e) => updateTier(index, 'minContribution', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+                        min="10"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Max Backers
+                      </label>
+                      <input
+                        type="number"
+                        value={tier.maxBackers}
+                        onChange={(e) => updateTier(index, 'maxBackers', parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+                        min="1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-gray-200"></div>
+
+            {/* ✨ MILESTONES - EDITABLE */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Milestones</h3>
+                  <p className="text-sm text-gray-600">Must sum to 100%</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addMilestone}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                  disabled={milestones.length >= 5}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Milestone
+                </button>
+              </div>
+
+              {milestones.map((milestone, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-gray-700">Milestone {index + 1}</span>
+                    {milestones.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => removeMilestone(index)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="Milestone description"
+                    value={milestone.description}
+                    onChange={(e) => updateMilestone(index, 'description', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+                    maxLength={200}
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Percentage (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={milestone.percentage}
+                        onChange={(e) => updateMilestone(index, 'percentage', parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+                        min="10"
+                        max="100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Days after campaign ends
+                      </label>
+                      <input
+                        type="number"
+                        value={milestone.daysAfterEnd}
+                        onChange={(e) => updateMilestone(index, 'daysAfterEnd', parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+                        min="1"
+                        max="365"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Total percentage display */}
+              <div className={`text-sm font-medium text-center p-2 rounded-lg ${
+                milestones.reduce((sum, m) => sum + Number(m.percentage), 0) === 100
+                  ? 'bg-green-50 text-green-700'
+                  : 'bg-yellow-50 text-yellow-700'
+              }`}>
+                Total: {milestones.reduce((sum, m) => sum + Number(m.percentage), 0)}%
+                {milestones.reduce((sum, m) => sum + Number(m.percentage), 0) === 100 ? ' ✓' : ' (must be 100%)'}
+              </div>
+            </div>
+
             {/* Info Box */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex gap-3">
                 <ImageIcon className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-blue-800">
-                  <p className="font-medium mb-1">Default settings</p>
-                  <ul className="space-y-1 text-blue-700">
-                    <li>• Bronze tier: $10 minimum (max 100 backers)</li>
-                    <li>• 2 milestones: 50% each</li>
-                    <li>• 3% platform fee on success</li>
-                  </ul>
+                  <p className="font-medium mb-1">Platform fee</p>
+                  <p className="text-blue-700">3% fee on successful campaigns</p>
                 </div>
               </div>
             </div>
 
-            {/* Error */}
+            {/* Error/Success (bez zmian) */}
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -320,7 +539,6 @@ export default function CreateCampaign() {
               </div>
             )}
 
-            {/* Success */}
             {isConfirmed && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -353,7 +571,7 @@ export default function CreateCampaign() {
           </form>
         </div>
 
-        {/* Tips Section */}
+        {/* Tips (bez zmian) */}
         <div className="mt-12 bg-gray-100 rounded-lg p-8">
           <h3 className="text-xl font-bold text-gray-900 mb-4">
             Tips for a successful campaign
