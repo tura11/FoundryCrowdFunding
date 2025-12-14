@@ -393,6 +393,32 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                     <div className="text-sm text-gray-600">{isActive ? 'days to go' : 'ended'}</div>
                   </div>
                 </div>
+
+                {/* Funding Breakdown - pokazuje się gdy goal przekroczony */}
+                {progress > 100 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                    <h3 className="font-bold text-gray-900 mb-2">🎉 Funding Breakdown</h3>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Goal:</span>
+                        <span className="font-medium text-gray-900">${Number(goalFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Raised:</span>
+                        <span className="font-medium text-green-600">${Number(raisedFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-blue-200 pt-1 mt-1">
+                        <span className="text-gray-600">Extra funds:</span>
+                        <span className="font-bold text-blue-600">
+                          +${(Number(raisedFormatted) - Number(goalFormatted)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-3 italic">
+                      💡 Extra funds will be used for stretch goals and enhanced features
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-gray-200 mb-6"></div>
