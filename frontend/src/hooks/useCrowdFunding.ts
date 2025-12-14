@@ -101,6 +101,19 @@ export function useCrowdFunding() {
     });
   };
 
+  const withdraw = async (
+    campaingId: number,
+  ) => {
+    return writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: crowdFundingABI,
+      functionName: 'withdraw',
+      args: [
+        BigInt(campaingId),
+      ],
+    })
+  }
+
   const useCampaign = (id: number) => {
     return useReadContract({
       abi: crowdFundingABI,
@@ -132,6 +145,7 @@ export function useCrowdFunding() {
     campaignCount,
     createCampaign,
     contribute,
+    withdraw,
     approveUSDC,
     useCampaign,
     useCampaignTiers,      
