@@ -101,6 +101,55 @@ export function useCrowdFunding() {
     });
   };
 
+
+  const voteMilesontes = async (
+    campaignId: number,
+    milestoneIndex: number,
+    vote: boolean
+  ) => {
+    return writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: crowdFundingABI,
+      functionName: 'voteMilestone',
+      args: [
+        BigInt(campaignId),
+        BigInt(milestoneIndex),
+        vote
+      ],
+    })
+  }
+
+  const finalizeMilestoneVoting = async (
+    campaignId: number,
+    milestoneIndex: number
+  ) => (
+    writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: crowdFundingABI,
+      functionName: 'finalizeMilestoneVoting',
+      args: [
+        BigInt(campaignId),
+        BigInt(milestoneIndex)
+      ],
+    })
+  )
+
+
+  const releaseMilestoneFunds = async (
+    campaignId: number,
+    milestoneIndex: number
+  ) => (
+    writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: crowdFundingABI,
+      functionName: 'releaseMilestoneFunds',
+      args: [
+        BigInt(campaignId),
+        BigInt(milestoneIndex)
+      ],
+    })
+  )
+
   const withdraw = async (
     campaingId: number,
   ) => {
@@ -145,6 +194,9 @@ export function useCrowdFunding() {
     campaignCount,
     createCampaign,
     contribute,
+    voteMilesontes,
+    finalizeMilestoneVoting,
+    releaseMilestoneFunds,
     withdraw,
     approveUSDC,
     useCampaign,
