@@ -7,6 +7,15 @@ import { useAccount } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Upload, X, Image as ImageIcon, CheckCircle, AlertCircle, Plus, Trash2 } from 'lucide-react';
+import { 
+  toastTxSent, 
+  toastTxConfirming, 
+  toastTxSuccess, 
+  toastTxError,
+  toastCampaignCreated,
+  toastWalletNotConnected,
+  toastValidationError
+} from '../components/lib/toasts';
 
 interface Tier {
   name: string;
@@ -39,8 +48,8 @@ export default function CreateCampaign() {
   const [duration, setDuration] = useState('30');
   const [imageUrl, setImageUrl] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [currentToastId, setCurrentToastId] = useState<string | null>(null);
 
-  // ✨ NOWE - Edytowalne tiers
   const [tiers, setTiers] = useState<Tier[]>([
     {
       name: 'Bronze Supporter',
@@ -50,21 +59,34 @@ export default function CreateCampaign() {
     }
   ]);
 
-  // ✨ NOWE - Edytowalne milestones
   const [milestones, setMilestones] = useState([
     { description: 'First milestone', percentage: 50, daysAfterEnd: 30 },
     { description: 'Final milestone', percentage: 50, daysAfterEnd: 60 }
   ]);
 
+  // Handle transaction states with toasts
   useEffect(() => {
-    if (isConfirmed && imageUrl) {
-      const newCampaignId = Number(campaignCount || 0);
-      localStorage.setItem(`campaign-${newCampaignId}-image`, imageUrl);
+    if (isPending && !currentToastId) {
+      const toastId = toastTxSent();
+      setCurrentToastId(toastId);
+    } else if (isConfirming && currentToastId) {
+      toastTxConfirming(currentToastId);
+    } else if (isConfirmed && currentToastId) {
+      toastTxSuccess(currentToastId, 'Campaign created!');
+      toastCampaignCreated();
+      
+      if (imageUrl) {
+        const newCampaignId = Number(campaignCount || 0);
+        localStorage.setItem(`campaign-${newCampaignId}-image`, imageUrl);
+      }
+      
+      setCurrentToastId(null);
       setTimeout(() => router.push('/'), 2000);
-    } else if (isConfirmed) {
-      setTimeout(() => router.push('/'), 2000);
+    } else if (error && currentToastId) {
+      toastTxError(currentToastId, error);
+      setCurrentToastId(null);
     }
-  }, [isConfirmed, imageUrl, router, campaignCount]);
+  }, [isPending, isConfirming, isConfirmed, error, currentToastId, imageUrl, campaignCount, router]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -84,10 +106,9 @@ export default function CreateCampaign() {
     setImageUrl('');
   };
 
-  // ✨ Tier handlers
   const addTier = () => {
     if (tiers.length >= 5) {
-      alert('Maximum 5 tiers allowed');
+      toastValidationError('Maximum 5 tiers allowed');
       return;
     }
     setTiers([...tiers, {
@@ -100,7 +121,7 @@ export default function CreateCampaign() {
 
   const removeTier = (index: number) => {
     if (tiers.length <= 1) {
-      alert('At least 1 tier required');
+      toastValidationError('At least 1 tier required');
       return;
     }
     setTiers(tiers.filter((_, i) => i !== index));
@@ -112,10 +133,9 @@ export default function CreateCampaign() {
     setTiers(newTiers);
   };
 
-  // ✨ Milestone handlers
   const addMilestone = () => {
     if (milestones.length >= 5) {
-      alert('Maximum 5 milestones allowed');
+      toastValidationError('Maximum 5 milestones allowed');
       return;
     }
     setMilestones([...milestones, {
@@ -127,7 +147,7 @@ export default function CreateCampaign() {
 
   const removeMilestone = (index: number) => {
     if (milestones.length <= 2) {
-      alert('At least 2 milestones required');
+      toastValidationError('At least 2 milestones required');
       return;
     }
     setMilestones(milestones.filter((_, i) => i !== index));
@@ -143,14 +163,13 @@ export default function CreateCampaign() {
     e.preventDefault();
     
     if (!isConnected) {
-      alert('Connect your wallet first!');
+      toastWalletNotConnected();
       return;
     }
 
-    // Validate milestones sum to 100%
     const totalPercentage = milestones.reduce((sum, m) => sum + Number(m.percentage), 0);
     if (totalPercentage !== 100) {
-      alert(`Milestones must sum to 100% (currently ${totalPercentage}%)`);
+      toastValidationError(`Milestones must sum to 100% (currently ${totalPercentage}%)`);
       return;
     }
 
@@ -209,7 +228,7 @@ export default function CreateCampaign() {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
             
-            {/* Image Upload (bez zmian) */}
+            {/* Image Upload */}
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-3">
                 Project image
@@ -257,7 +276,7 @@ export default function CreateCampaign() {
 
             <div className="border-t border-gray-200"></div>
 
-            {/* Basic Info (bez zmian) */}
+            {/* Basic Info */}
             <div className="space-y-6">
               <h3 className="text-lg font-bold text-gray-900">Project basics</h3>
 
@@ -353,7 +372,7 @@ export default function CreateCampaign() {
 
             <div className="border-t border-gray-200"></div>
 
-            {/* ✨ REWARD TIERS - EDITABLE */}
+            {/* REWARD TIERS */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-900">Reward Tiers</h3>
@@ -433,7 +452,7 @@ export default function CreateCampaign() {
 
             <div className="border-t border-gray-200"></div>
 
-            {/* ✨ MILESTONES - EDITABLE */}
+            {/* MILESTONES */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <div>
@@ -528,27 +547,6 @@ export default function CreateCampaign() {
               </div>
             </div>
 
-            {/* Error/Success (bez zmian) */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-red-800 mb-1">Error creating campaign</p>
-                  <p className="text-sm text-red-700">{error.message}</p>
-                </div>
-              </div>
-            )}
-
-            {isConfirmed && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-green-800 mb-1">Success!</p>
-                  <p className="text-sm text-green-700">Campaign created. Redirecting...</p>
-                </div>
-              </div>
-            )}
-
             {/* Submit Button */}
             <div className="pt-6 border-t border-gray-200">
               <button
@@ -571,7 +569,7 @@ export default function CreateCampaign() {
           </form>
         </div>
 
-        {/* Tips (bez zmian) */}
+        {/* Tips */}
         <div className="mt-12 bg-gray-100 rounded-lg p-8">
           <h3 className="text-xl font-bold text-gray-900 mb-4">
             Tips for a successful campaign
