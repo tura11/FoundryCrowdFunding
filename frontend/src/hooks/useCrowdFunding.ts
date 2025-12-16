@@ -2,7 +2,6 @@ import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 
 import { parseUnits } from 'viem';
 import { crowdFundingABI } from '../crowdFundingABI';
 import { useAccount } from 'wagmi';
-import { useMemo } from 'react';
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
 const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`;
@@ -224,102 +223,6 @@ export function useCrowdFunding() {
     });
   };
 
-  // ✨ NEW - Helper to get all campaigns created by user
-  const useUserCreatedCampaigns = () => {
-    const count = Number(campaignCount || 0);
-    const campaignIds = Array.from({ length: count }, (_, i) => i);
-    
-    // Fetch all campaigns and filter by creator
-    const campaigns = campaignIds.map(id => {
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      const { data } = useCampaign(id);
-      return { id, data };
-    });
-
-    return useMemo(() => {
-      return campaigns.filter(c => {
-        if (!c.data || !address) return false;
-        const campaign = c.data as any;
-        return campaign.creator?.toLowerCase() === address.toLowerCase();
-      }).map(c => c.id);
-    }, [campaigns, address]);
-  };
-
-  // ✨ NEW - Helper to get all campaigns backed by user
-  const useUserBackedCampaigns = () => {
-    const count = Number(campaignCount || 0);
-    const campaignIds = Array.from({ length: count }, (_, i) => i);
-    
-    // Fetch contributions for each campaign
-    const contributions = campaignIds.map(id => {
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      const { data } = useContribution(id);
-      return { id, contribution: data };
-    });
-
-    return useMemo(() => {
-      return contributions.filter(c => {
-        if (!c.contribution) return false;
-        return Number(c.contribution) > 0;
-      }).map(c => c.id);
-    }, [contributions]);
-  };
-
-  // ✨ NEW - Get dashboard stats
-  const useDashboardStats = () => {
-    const createdCampaigns = useUserCreatedCampaigns();
-    const backedCampaigns = useUserBackedCampaigns();
-    
-    // Calculate total raised from created campaigns
-    const createdCampaignsData = createdCampaigns.map(id => {
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      const { data } = useCampaign(id);
-      return data;
-    });
-
-    const totalRaised = useMemo(() => {
-      return createdCampaignsData.reduce<number>((sum, campaign) => {
-        if (!campaign) return sum;
-        const c = campaign as any;
-        return sum + Number(c.raised ?? 0);
-      }, 0);
-    }, [createdCampaignsData]);
-
-    // Calculate total backed amount
-    const backedContributions = backedCampaigns.map(id => {
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      const { data } = useContribution(id);
-      return data;
-    });
-
-      const totalBacked = useMemo(() => {
-        return backedContributions.reduce<number>((sum, contribution) => {
-          return sum + Number(contribution ?? 0);
-        }, 0);
-      }, [backedContributions]);
-    // Calculate success rate
-    const successfulCampaigns = useMemo(() => {
-      return createdCampaignsData.filter(campaign => {
-        if (!campaign) return false;
-        const c = campaign as any;
-        return c.state === 1; // Successful state
-      }).length;
-    }, [createdCampaignsData]);
-
-    const successRate = createdCampaigns.length > 0 
-      ? (successfulCampaigns / createdCampaigns.length) * 100 
-      : 0;
-
-    return {
-      createdCount: createdCampaigns.length,
-      backedCount: backedCampaigns.length,
-      totalRaised,
-      totalBacked,
-      successRate,
-      successfulCampaigns
-    };
-  };
-
   return {
     // State
     campaignCount,
@@ -345,10 +248,5 @@ export function useCrowdFunding() {
     useCampaignMilestones,
     useContribution,
     useTotalContributors,
-    
-    // ✨ NEW - Dashboard helpers
-    useUserCreatedCampaigns,
-    useUserBackedCampaigns,
-    useDashboardStats,
   };
 }
