@@ -102,7 +102,7 @@ export function useCrowdFunding() {
   };
 
 
-  const voteMilesontes = async (
+  const voteMilestones = async (
     campaignId: number,
     milestoneIndex: number,
     vote: boolean
@@ -163,6 +163,19 @@ export function useCrowdFunding() {
     })
   }
 
+  const refund = async (
+    campaignId: number,
+  ) => {
+    return writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: crowdFundingABI,
+      functionName: 'refund',
+      args: [
+        BigInt(campaignId),
+      ],
+    })
+  }
+
   const useCampaign = (id: number) => {
     return useReadContract({
       abi: crowdFundingABI,
@@ -194,14 +207,15 @@ export function useCrowdFunding() {
     campaignCount,
     createCampaign,
     contribute,
-    voteMilesontes,
+    voteMilestones,
     finalizeMilestoneVoting,
     releaseMilestoneFunds,
     withdraw,
     approveUSDC,
     useCampaign,
     useCampaignTiers,      
-    useCampaignMilestones,  
+    useCampaignMilestones,
+    refund,
     isPending,
     isConfirming,
     isConfirmed,
