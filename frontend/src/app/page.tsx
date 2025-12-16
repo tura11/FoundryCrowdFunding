@@ -1,3 +1,7 @@
+// Ten plik nie wymaga zmian - nie ma tam żadnych transakcji
+// Zostaw go jak jest, bo działa świetnie
+// Wszystkie alert() są tylko w campaign detail i create page
+
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -47,20 +51,20 @@ export default function Home() {
             {/* Nav */}
             <div className="flex items-center gap-6">
               <nav className="hidden md:flex items-center gap-6">
-              <Link href="/" className="text-gray-700 hover:text-gray-900 font-medium">
-                Discover
-              </Link>
-              {isConnected && (
-                <Link href="/dashboard" className="text-gray-700 hover:text-gray-900 font-medium">
-                  Dashboard
+                <Link href="/" className="text-gray-700 hover:text-gray-900 font-medium">
+                  Discover
                 </Link>
-              )}
-              {isConnected && (
-                <Link href="/create" className="text-gray-700 hover:text-gray-900 font-medium">
-                  Start a project
-                </Link>
-              )}
-            </nav>
+                {isConnected && (
+                  <>
+                    <Link href="/dashboard" className="text-gray-700 hover:text-gray-900 font-medium">
+                      Dashboard
+                    </Link>
+                    <Link href="/create" className="text-gray-700 hover:text-gray-900 font-medium">
+                      Start a project
+                    </Link>
+                  </>
+                )}
+              </nav>
               <ConnectButton />
             </div>
           </div>
@@ -177,7 +181,6 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
   const { useCampaign } = useCrowdFunding();
   const { data: campaign, isLoading } = useCampaign(campaignId);
   
-  // Get saved image from localStorage
   const [savedImage, setSavedImage] = useState<string | null>(null);
   
   useEffect(() => {
@@ -224,7 +227,7 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
     <Link href={`/campaign/${campaignId}`} className="group">
       <article className="bg-white rounded-lg overflow-hidden border border-gray-200 hover:shadow-xl transition-all duration-300">
         
-        {/* Image - FIXED: Always show gradient if no savedImage */}
+        {/* Image */}
         <div className="relative h-64 overflow-hidden">
           {savedImage ? (
             <img 
@@ -265,7 +268,6 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
 
           {/* Progress */}
           <div className="mb-4">
-            {/* Goal nad paskiem po prawej */}
             <div className="flex justify-between items-end mb-2">
               <div>
                 <div className="text-2xl font-bold text-gray-900">
@@ -285,7 +287,6 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
               </div>
             </div>
 
-            {/* Progress bar */}
             <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
               <div 
                 className="bg-green-500 h-2 rounded-full transition-all duration-500"
@@ -293,7 +294,6 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
               />
             </div>
             
-            {/* Stats row */}
             <div className="flex justify-between items-center text-sm">
               <div className="text-gray-600">
                 <span className="font-bold text-gray-900">{progress.toFixed(0)}%</span> funded
