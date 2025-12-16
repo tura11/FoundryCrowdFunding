@@ -10,11 +10,27 @@ import {
   ArrowLeft, Target, Clock, Users, TrendingUp, 
   Coins, Award, CheckCircle, AlertCircle, Loader, Heart, Wallet
 } from 'lucide-react';
+import {
+  toastTxSent,
+  toastTxConfirming,
+  toastTxSuccess,
+  toastTxError,
+  toastWalletNotConnected,
+  toastInvalidAmount,
+  toastApprovalSuccess,
+  toastContributionSuccess,
+  toastWithdrawSuccess,
+  toastMintSuccess,
+  toastVoteSuccess,
+  toastFundsReleased,
+  toastRefundSuccess,
+  toastNotCreator,
+  toastValidationError
+} from '../../components/lib/toasts';
 
 export default function ClientCampaignDetail({ campaignId }: { campaignId: number }) {
   const { address, isConnected } = useAccount();
   
-  // ✅ Wszystkie funkcje z hooka w jednym wywołaniu
   const { 
     useCampaign, 
     useCampaignTiers, 
@@ -25,7 +41,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     voteMilestones: voteMilestone,
     finalizeMilestoneVoting, 
     releaseMilestoneFunds,
-    refund, // ← NOWE
+    refund,
     isPending,
     isConfirming,
     isConfirmed,
@@ -41,10 +57,10 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
   const [step, setStep] = useState<'idle' | 'needsApproval' | 'approved' | 'contributing'>('idle');
   const [savedImage, setSavedImage] = useState<string | null>(null);
   const [mintingUSDC, setMintingUSDC] = useState(false);
+  const [currentToastId, setCurrentToastId] = useState<string | null>(null);
 
   const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`;
 
-  // Get user's USDC balance
   const { data: usdcBalance } = useReadContract({
     address: USDC_ADDRESS,
     abi: [
@@ -64,7 +80,6 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     }
   });
 
-  // Check if user is a contributor (simplified)
   const contributions = address ? { [campaignId]: { [address]: BigInt(1) } } : {};
 
   useEffect(() => {
@@ -74,36 +89,48 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     }
   }, [campaignId]);
 
+  // ========== TRANSACTION STATE MANAGEMENT ==========
   useEffect(() => {
-    if (!isPending && !isConfirming && isConfirmed) {
+    if (isPending && !currentToastId) {
+      const toastId = toastTxSent();
+      setCurrentToastId(toastId);
+    } else if (isConfirming && currentToastId) {
+      toastTxConfirming(currentToastId);
+    } else if (isConfirmed && currentToastId) {
       if (step === 'needsApproval') {
-        console.log('Approval confirmed, switching to approved state');
+        toastTxSuccess(currentToastId, 'USDC approved!');
+        toastApprovalSuccess();
         setStep('approved');
+        setCurrentToastId(null);
       } else if (step === 'contributing') {
-        console.log('Contribution confirmed, refreshing...');
+        toastTxSuccess(currentToastId, 'Contribution successful!');
+        toastContributionSuccess(contributionAmount);
         setContributionAmount('');
         setSelectedTier(0);
         setStep('idle');
+        setCurrentToastId(null);
         
         setTimeout(() => {
           window.location.reload();
         }, 2000);
       }
+    } else if (error && currentToastId) {
+      toastTxError(currentToastId, error);
+      setStep('idle');
+      setCurrentToastId(null);
     }
-  }, [isConfirmed, isPending, isConfirming, step]);
+  }, [isPending, isConfirming, isConfirmed, error, currentToastId, step, contributionAmount]);
 
   // ========== HANDLERS ==========
 
   const handleContribute = async () => {
-    console.log('handleContribute called, current step:', step);
-    
     if (!isConnected) {
-      alert('Connect wallet first!');
+      toastWalletNotConnected();
       return;
     }
 
     if (!contributionAmount || parseFloat(contributionAmount) <= 0) {
-      alert('Enter valid amount');
+      toastInvalidAmount();
       return;
     }
 
@@ -111,33 +138,32 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       const selectedTierData = tiers[selectedTier] as any;
       const minRequired = parseFloat(formatUnits(selectedTierData.minContribution, 6));
       if (parseFloat(contributionAmount) < minRequired) {
-        alert(`Minimum contribution for this tier is $${minRequired}`);
+        toastValidationError(`Minimum contribution for this tier is $${minRequired}`);
         return;
       }
     }
 
     try {
       if (step === 'idle') {
-        console.log('Starting approval...');
         setStep('needsApproval');
         await approveUSDC(contributionAmount);
       } else if (step === 'approved') {
-        console.log('Starting contribution...');
         setStep('contributing');
         await contributeToCampaign(campaignId, contributionAmount, selectedTier);
       }
     } catch (err: any) {
       console.error('Transaction error:', err);
-      alert(`Error: ${err.message || 'Transaction failed'}`);
       setStep('idle');
     }
   };
 
   const handleMintUSDC = async () => {
     if (!isConnected || !address) {
-      alert('Connect wallet first!');
+      toastWalletNotConnected();
       return;
     }
+
+    const mintToastId = toastTxSent();
 
     try {
       setMintingUSDC(true);
@@ -145,7 +171,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       const amount = (BigInt(10000) * BigInt(1000000)).toString(16).padStart(64, '0');
       const addressPadded = address.slice(2).padStart(64, '0');
 
-      const tx = await (window as any).ethereum.request({
+      await (window as any).ethereum.request({
         method: 'eth_sendTransaction',
         params: [{
           from: address,
@@ -154,12 +180,12 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
         }]
       });
 
-      console.log('Mint transaction:', tx);
-      alert('✅ Success! 10,000 USDC minted to your wallet');
+      toastTxSuccess(mintToastId, 'USDC minted!');
+      toastMintSuccess('10,000');
       
     } catch (err: any) {
       console.error('Mint error:', err);
-      alert(`Error: ${err.message || 'Minting failed'}`);
+      toastTxError(mintToastId, err);
     } finally {
       setMintingUSDC(false);
     }
@@ -167,96 +193,116 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
   const handleWithdraw = async () => {
     if (!isConnected || !isCreator) {
-      alert('Only campaign creator can withdraw!');
+      toastNotCreator();
       return;
     }
 
+    const withdrawToastId = toastTxSent();
+
     try {
       await withdrawFunds(campaignId);
-      alert('✅ Withdrawal initiated! Check your wallet.');
+      toastTxSuccess(withdrawToastId, 'Withdrawal successful!');
+      toastWithdrawSuccess(raisedFormatted);
       
       setTimeout(() => {
         window.location.reload();
       }, 2000);
     } catch (err: any) {
       console.error('Withdraw error:', err);
-      alert(`Error: ${err.message || 'Withdrawal failed'}`);
+      toastTxError(withdrawToastId, err);
     }
   };
 
   const handleVoteMilestone = async (milestoneId: number, vote: boolean) => {
     if (!isConnected) {
-      alert('Connect wallet first!');
+      toastWalletNotConnected();
       return;
     }
 
+    const voteToastId = toastTxSent();
+
     try {
       await voteMilestone(campaignId, milestoneId, vote);
-      alert(`✅ Vote ${vote ? 'YES' : 'NO'} submitted!`);
+      toastTxSuccess(voteToastId, 'Vote submitted!');
+      toastVoteSuccess(vote);
       
       setTimeout(() => {
         window.location.reload();
       }, 2000);
     } catch (err: any) {
       console.error('Vote error:', err);
-      alert(`Error: ${err.message || 'Vote failed'}`);
+      toastTxError(voteToastId, err);
     }
   };
 
   const handleFinalizeMilestone = async (milestoneId: number) => {
     if (!isConnected) {
-      alert('Connect wallet first!');
+      toastWalletNotConnected();
       return;
     }
 
+    const finalizeToastId = toastTxSent();
+
     try {
       await finalizeMilestoneVoting(campaignId, milestoneId);
-      alert('✅ Voting finalized!');
+      toastTxSuccess(finalizeToastId, 'Voting finalized!');
       
       setTimeout(() => {
         window.location.reload();
       }, 2000);
     } catch (err: any) {
       console.error('Finalize error:', err);
-      alert(`Error: ${err.message || 'Finalization failed'}`);
+      toastTxError(finalizeToastId, err);
     }
   };
 
   const handleReleaseFunds = async (milestoneId: number) => {
     if (!isConnected || !isCreator) {
-      alert('Only creator can release funds!');
+      toastNotCreator();
       return;
     }
 
+    const releaseToastId = toastTxSent();
+
     try {
       await releaseMilestoneFunds(campaignId, milestoneId);
-      alert('✅ Funds released! Check your wallet.');
+      toastTxSuccess(releaseToastId, 'Funds released!');
+      
+      // Calculate milestone amount for toast
+      if (milestones && Array.isArray(milestones)) {
+        const milestone = milestones[milestoneId] as any;
+        const amount = (Number(raisedFormatted) * milestone.percentage / 100).toFixed(0);
+        toastFundsReleased(amount);
+      }
       
       setTimeout(() => {
         window.location.reload();
       }, 2000);
     } catch (err: any) {
       console.error('Release error:', err);
-      alert(`Error: ${err.message || 'Release failed'}`);
+      toastTxError(releaseToastId, err);
     }
   };
 
   const handleRefund = async () => {
     if (!isConnected) {
-      alert('Connect wallet first!');
+      toastWalletNotConnected();
       return;
     }
 
+    const refundToastId = toastTxSent();
+
     try {
       await refund(campaignId);
-      alert('✅ Refund successful! Check your wallet.');
+      toastTxSuccess(refundToastId, 'Refund processed!');
+      toastRefundSuccess(contributionAmount || '0');
       
       setTimeout(() => {
         window.location.reload();
       }, 2000);
     } catch (err: any) {
       console.error('Refund error:', err);
-      alert(`Error: ${err.message || 'Refund failed'}`);
+      toastTxError(refundToastId, err);
     }
   };
 
@@ -393,7 +439,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               <div className="space-y-4">
                 {tiers && Array.isArray(tiers) && tiers.length > 0 ? (
                   (tiers as any[]).map((tier: any, idx: number) => {
-                    const { name, desc, minContribution, maxBackers, currentBackers } = tier;
+                    const { name, description: desc, minContribution, maxBackers, currentBackers } = tier;
                     const minFormatted = formatUnits(minContribution, 6);
                     const spotsLeft = Number(maxBackers) - Number(currentBackers);
                     
@@ -430,14 +476,13 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
             <div className="border-t border-gray-200"></div>
 
-            {/* Milestones with Voting */}
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Milestones & Voting</h2>
               
               <div className="space-y-6">
                 {milestones && Array.isArray(milestones) && milestones.length > 0 ? (
                   (milestones as any[]).map((milestone: any, idx: number) => {
-                    const { desc, percentage, deadline, votesFor, votesAgainst, approved, fundsReleased } = milestone;
+                    const { description: desc, percentage, deadline, votesFor, votesAgainst, approved, fundsReleased } = milestone;
                     const deadlineDate = new Date(Number(deadline) * 1000);
                     const now = new Date();
                     const VOTING_PERIOD = 7 * 24 * 60 * 60 * 1000;
@@ -606,7 +651,6 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               </div>
             </div>
           </div>
-
           <div className="lg:col-span-1">
             <div className="bg-white border border-gray-200 rounded-lg p-6 sticky top-24">
               
@@ -664,7 +708,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
               <div className="border-t border-gray-200 mb-6"></div>
 
-                 {!isActive && hasFailed && (
+              {!isActive && hasFailed && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                   <p className="text-red-800 text-sm font-medium mb-3">
                     😔 Campaign did not reach its goal
@@ -689,14 +733,14 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                   </p>
                   <button
                     onClick={handleWithdraw}
-                    disabled={isPending || isConfirming || !isActive}
+                    disabled={isPending || isConfirming || isActive}
                     className="w-full bg-purple-500 text-white py-3 rounded-lg font-bold hover:bg-purple-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                   >
                     {isPending || isConfirming ? '⏳ Processing...' : '💰 Withdraw Funds'}
                   </button>
-                  {!isActive && (
+                  {isActive && (
                     <p className="text-xs text-gray-500 text-center mt-2">
-                      Campaign must be active to withdraw
+                      Campaign must end first
                     </p>
                   )}
                 </div>
@@ -775,26 +819,6 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                       </select>
                     </div>
                   </div>
-
-                  {error && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-red-800">Error</p>
-                        <p className="text-sm text-red-700">{error.message}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {isConfirmed && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-start gap-3">
-                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-green-800">Success!</p>
-                        <p className="text-sm text-green-700">Your pledge has been recorded</p>
-                      </div>
-                    </div>
-                  )}
 
                   <button
                     onClick={handleContribute}
