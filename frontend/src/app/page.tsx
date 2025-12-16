@@ -47,15 +47,20 @@ export default function Home() {
             {/* Nav */}
             <div className="flex items-center gap-6">
               <nav className="hidden md:flex items-center gap-6">
-                <Link href="/" className="text-gray-700 hover:text-gray-900 font-medium">
-                  Discover
+              <Link href="/" className="text-gray-700 hover:text-gray-900 font-medium">
+                Discover
+              </Link>
+              {isConnected && (
+                <Link href="/dashboard" className="text-gray-700 hover:text-gray-900 font-medium">
+                  Dashboard
                 </Link>
-                {isConnected && (
-                  <Link href="/create" className="text-gray-700 hover:text-gray-900 font-medium">
-                    Start a project
-                  </Link>
-                )}
-              </nav>
+              )}
+              {isConnected && (
+                <Link href="/create" className="text-gray-700 hover:text-gray-900 font-medium">
+                  Start a project
+                </Link>
+              )}
+            </nav>
               <ConnectButton />
             </div>
           </div>
@@ -159,7 +164,7 @@ export default function Home() {
       <footer className="bg-white border-t border-gray-200 mt-20">
         <div className="max-w-7xl mx-auto px-6 py-12">
           <div className="text-center text-gray-600">
-            <p className="mb-2">© 2024 CrowdFund. Powered by Web3.</p>
+            <p className="mb-2">© 2025 CrowdFund. Powered by Tymek and Kuba.</p>
             <p className="text-sm">Decentralized • Transparent • Community-driven</p>
           </div>
         </div>
