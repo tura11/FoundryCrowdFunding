@@ -14,12 +14,18 @@ import {
 export default function ClientCampaignDetail({ campaignId }: { campaignId: number }) {
   const { address, isConnected } = useAccount();
   
+  // ✅ Wszystkie funkcje z hooka w jednym wywołaniu
   const { 
     useCampaign, 
     useCampaignTiers, 
     useCampaignMilestones,
     approveUSDC,
-    contribute,
+    contribute: contributeToCampaign,
+    withdraw: withdrawFunds, 
+    voteMilestones: voteMilestone,
+    finalizeMilestoneVoting, 
+    releaseMilestoneFunds,
+    refund, // ← NOWE
     isPending,
     isConfirming,
     isConfirmed,
@@ -58,6 +64,9 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     }
   });
 
+  // Check if user is a contributor (simplified)
+  const contributions = address ? { [campaignId]: { [address]: BigInt(1) } } : {};
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const img = localStorage.getItem(`campaign-${campaignId}-image`);
@@ -83,42 +92,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     }
   }, [isConfirmed, isPending, isConfirming, step]);
 
-  if (campaignLoading || tiersLoading || milestonesLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 border border-gray-200">
-          <Loader className="w-12 h-12 animate-spin text-green-500 mx-auto mb-4" />
-          <p className="text-gray-700 font-medium">Loading campaign...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!campaign) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 border border-gray-200 text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-700 font-medium">Campaign not found</p>
-          <Link href="/" className="text-green-600 hover:underline mt-4 inline-block">
-            Back to Home
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const { title, goal, raised, duration, description, creator, state } = campaign as any;
-  
-  const progress = Number(raised) > 0 ? (Number(raised) / Number(goal)) * 100 : 0;
-  const goalFormatted = formatUnits(goal, 6);
-  const raisedFormatted = formatUnits(raised, 6);
-  
-  const durationDate = new Date(Number(duration) * 1000);
-  const now = new Date();
-  const daysLeft = Math.max(0, Math.ceil((durationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-  const isActive = now < durationDate;
-  const isCreator = address?.toLowerCase() === creator.toLowerCase();
+  // ========== HANDLERS ==========
 
   const handleContribute = async () => {
     console.log('handleContribute called, current step:', step);
@@ -150,7 +124,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       } else if (step === 'approved') {
         console.log('Starting contribution...');
         setStep('contributing');
-        await contribute(campaignId, contributionAmount, selectedTier);
+        await contributeToCampaign(campaignId, contributionAmount, selectedTier);
       }
     } catch (err: any) {
       console.error('Transaction error:', err);
@@ -190,6 +164,141 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       setMintingUSDC(false);
     }
   };
+
+  const handleWithdraw = async () => {
+    if (!isConnected || !isCreator) {
+      alert('Only campaign creator can withdraw!');
+      return;
+    }
+
+    try {
+      await withdrawFunds(campaignId);
+      alert('✅ Withdrawal initiated! Check your wallet.');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      console.error('Withdraw error:', err);
+      alert(`Error: ${err.message || 'Withdrawal failed'}`);
+    }
+  };
+
+  const handleVoteMilestone = async (milestoneId: number, vote: boolean) => {
+    if (!isConnected) {
+      alert('Connect wallet first!');
+      return;
+    }
+
+    try {
+      await voteMilestone(campaignId, milestoneId, vote);
+      alert(`✅ Vote ${vote ? 'YES' : 'NO'} submitted!`);
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      console.error('Vote error:', err);
+      alert(`Error: ${err.message || 'Vote failed'}`);
+    }
+  };
+
+  const handleFinalizeMilestone = async (milestoneId: number) => {
+    if (!isConnected) {
+      alert('Connect wallet first!');
+      return;
+    }
+
+    try {
+      await finalizeMilestoneVoting(campaignId, milestoneId);
+      alert('✅ Voting finalized!');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      console.error('Finalize error:', err);
+      alert(`Error: ${err.message || 'Finalization failed'}`);
+    }
+  };
+
+  const handleReleaseFunds = async (milestoneId: number) => {
+    if (!isConnected || !isCreator) {
+      alert('Only creator can release funds!');
+      return;
+    }
+
+    try {
+      await releaseMilestoneFunds(campaignId, milestoneId);
+      alert('✅ Funds released! Check your wallet.');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      console.error('Release error:', err);
+      alert(`Error: ${err.message || 'Release failed'}`);
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!isConnected) {
+      alert('Connect wallet first!');
+      return;
+    }
+
+    try {
+      await refund(campaignId);
+      alert('✅ Refund successful! Check your wallet.');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      console.error('Refund error:', err);
+      alert(`Error: ${err.message || 'Refund failed'}`);
+    }
+  };
+
+  // ========== LOADING & ERROR STATES ==========
+
+  if (campaignLoading || tiersLoading || milestonesLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg p-8 border border-gray-200">
+          <Loader className="w-12 h-12 animate-spin text-green-500 mx-auto mb-4" />
+          <p className="text-gray-700 font-medium">Loading campaign...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!campaign) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg p-8 border border-gray-200 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-gray-700 font-medium">Campaign not found</p>
+          <Link href="/" className="text-green-600 hover:underline mt-4 inline-block">
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const { title, goal, raised, duration, description, creator, state } = campaign as any;
+  
+  const progress = Number(raised) > 0 ? (Number(raised) / Number(goal)) * 100 : 0;
+  const goalFormatted = formatUnits(goal, 6);
+  const raisedFormatted = formatUnits(raised, 6);
+  
+  const durationDate = new Date(Number(duration) * 1000);
+  const now = new Date();
+  const daysLeft = Math.max(0, Math.ceil((durationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  const isActive = now < durationDate;
+  const isCreator = address?.toLowerCase() === creator.toLowerCase();
+  const hasFailed = !isActive && progress < 100;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -244,6 +353,11 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               {state === 1 && (
                 <div className="absolute top-6 right-6 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-bold">
                   ✓ Funded
+                </div>
+              )}
+              {hasFailed && (
+                <div className="absolute top-6 right-6 bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold">
+                  ❌ Failed
                 </div>
               )}
             </div>
@@ -316,34 +430,63 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
             <div className="border-t border-gray-200"></div>
 
+            {/* Milestones with Voting */}
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Milestones</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Milestones & Voting</h2>
               
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {milestones && Array.isArray(milestones) && milestones.length > 0 ? (
                   (milestones as any[]).map((milestone: any, idx: number) => {
                     const { desc, percentage, deadline, votesFor, votesAgainst, approved, fundsReleased } = milestone;
                     const deadlineDate = new Date(Number(deadline) * 1000);
+                    const now = new Date();
+                    const VOTING_PERIOD = 7 * 24 * 60 * 60 * 1000;
+                    const votingEndDate = new Date(deadlineDate.getTime() + VOTING_PERIOD);
+                    
+                    const isVotingOpen = !isActive && now >= deadlineDate && now < votingEndDate && !approved && !fundsReleased;
+                    const isVotingEnded = now >= votingEndDate && !approved;
+                    const canRelease = isCreator && approved && !fundsReleased;
+                    
+                    const totalVotes = Number(votesFor) + Number(votesAgainst);
+                    const approvalRate = totalVotes > 0 ? (Number(votesFor) / totalVotes) * 100 : 0;
+                    
+                    const timeUntilVoting = deadlineDate.getTime() - now.getTime();
+                    const timeLeftInVoting = votingEndDate.getTime() - now.getTime();
+                    
+                    const daysUntilVoting = Math.ceil(timeUntilVoting / (1000 * 60 * 60 * 24));
+                    const daysLeftVoting = Math.ceil(timeLeftInVoting / (1000 * 60 * 60 * 24));
                     
                     return (
                       <div 
                         key={idx}
-                        className="border border-gray-200 rounded-lg p-6 bg-white"
+                        className={`border-2 rounded-xl p-6 bg-white transition-all ${
+                          isVotingOpen ? 'border-blue-300 shadow-lg' : 
+                          fundsReleased ? 'border-green-300' :
+                          approved ? 'border-green-200' :
+                          'border-gray-200'
+                        }`}
                       >
-                        <div className="flex justify-between items-start mb-3">
+                        <div className="flex justify-between items-start mb-4">
                           <div>
-                            <h3 className="font-bold text-gray-900">Milestone {idx + 1}</h3>
+                            <h3 className="font-bold text-lg text-gray-900">Milestone {idx + 1}</h3>
                             <p className="text-sm text-green-600 font-medium mt-1">
-                              {percentage}% of funds
+                              {percentage}% of funds (${(Number(raisedFormatted) * percentage / 100).toFixed(0)})
                             </p>
                           </div>
+                          
                           {fundsReleased ? (
-                            <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">
-                              ✓ Released
+                            <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" />
+                              Released
                             </span>
                           ) : approved ? (
-                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" />
                               Approved
+                            </span>
+                          ) : isVotingOpen ? (
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full animate-pulse">
+                              🗳️ Voting Open
                             </span>
                           ) : (
                             <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-full">
@@ -351,10 +494,109 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                             </span>
                           )}
                         </div>
-                        <p className="text-gray-700 mb-3">{desc}</p>
-                        <p className="text-sm text-gray-500">
-                          Deadline: {deadlineDate.toLocaleDateString()}
-                        </p>
+
+                        <p className="text-gray-700 mb-4">{desc}</p>
+
+                        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                          <div className="flex items-center justify-between text-sm mb-2">
+                            <span className="text-gray-600">Deadline:</span>
+                            <span className="font-medium text-gray-900">{deadlineDate.toLocaleDateString()}</span>
+                          </div>
+                          
+                          {isVotingOpen && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-blue-600">⏳ Voting ends in:</span>
+                              <span className="font-bold text-blue-700">{daysLeftVoting} days</span>
+                            </div>
+                          )}
+                          
+                          {!isActive && now < deadlineDate && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-600">Voting opens in:</span>
+                              <span className="font-medium text-gray-700">{daysUntilVoting} days</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {totalVotes > 0 && (
+                          <div className="mb-4">
+                            <div className="flex justify-between text-sm mb-2">
+                              <span className="text-gray-600">Votes</span>
+                              <span className="font-medium text-gray-900">
+                                {totalVotes} total • {approvalRate.toFixed(0)}% approval
+                              </span>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-green-600 w-12">YES</span>
+                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-green-500 h-2 rounded-full transition-all"
+                                    style={{ width: `${approvalRate}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-bold text-green-700 w-8">{votesFor}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-red-600 w-12">NO</span>
+                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-red-500 h-2 rounded-full transition-all"
+                                    style={{ width: `${100 - approvalRate}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-bold text-red-700 w-8">{votesAgainst}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {isVotingOpen && !isCreator && contributions?.[campaignId]?.[address || ''] && (
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => handleVoteMilestone(idx, true)}
+                              disabled={isPending || isConfirming}
+                              className="flex-1 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                            >
+                              👍 Vote YES
+                            </button>
+                            <button
+                              onClick={() => handleVoteMilestone(idx, false)}
+                              disabled={isPending || isConfirming}
+                              className="flex-1 bg-red-500 text-white py-3 rounded-lg font-bold hover:bg-red-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                            >
+                              👎 Vote NO
+                            </button>
+                          </div>
+                        )}
+
+                        {isVotingEnded && !approved && (
+                          <button
+                            onClick={() => handleFinalizeMilestone(idx)}
+                            disabled={isPending || isConfirming}
+                            className="w-full bg-blue-500 text-white py-3 rounded-lg font-bold hover:bg-blue-600 disabled:opacity-50 transition-all"
+                          >
+                            ✅ Finalize Voting
+                          </button>
+                        )}
+
+                        {canRelease && (
+                          <button
+                            onClick={() => handleReleaseFunds(idx)}
+                            disabled={isPending || isConfirming}
+                            className="w-full bg-purple-500 text-white py-3 rounded-lg font-bold hover:bg-purple-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                          >
+                            💰 Release Funds
+                          </button>
+                        )}
+
+                        {!isActive && now < deadlineDate && (
+                          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                            ⏳ Voting will open on {deadlineDate.toLocaleDateString()}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -394,7 +636,6 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                   </div>
                 </div>
 
-                {/* Funding Breakdown - pokazuje się gdy goal przekroczony */}
                 {progress > 100 && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
                     <h3 className="font-bold text-gray-900 mb-2">🎉 Funding Breakdown</h3>
@@ -423,19 +664,41 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
               <div className="border-t border-gray-200 mb-6"></div>
 
-              {!isActive && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-                  <p className="text-gray-700 text-sm text-center font-medium">
-                    This project has ended
+                 {!isActive && hasFailed && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-red-800 text-sm font-medium mb-3">
+                    😔 Campaign did not reach its goal
+                  </p>
+                  <button
+                    onClick={handleRefund}
+                    disabled={isPending || isConfirming}
+                    className="w-full bg-red-500 text-white py-3 rounded-lg font-bold hover:bg-red-600 disabled:opacity-50 transition-all"
+                  >
+                    {isPending || isConfirming ? '⏳ Processing...' : '💸 Get Refund'}
+                  </button>
+                  <p className="text-xs text-gray-600 text-center mt-2">
+                    Get your contribution back
                   </p>
                 </div>
               )}
 
               {isCreator && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <p className="text-blue-800 text-sm font-medium">
+                  <p className="text-blue-800 text-sm font-medium mb-3">
                     ℹ️ You can't back your own project
                   </p>
+                  <button
+                    onClick={handleWithdraw}
+                    disabled={isPending || isConfirming || !isActive}
+                    className="w-full bg-purple-500 text-white py-3 rounded-lg font-bold hover:bg-purple-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isPending || isConfirming ? '⏳ Processing...' : '💰 Withdraw Funds'}
+                  </button>
+                  {!isActive && (
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      Campaign must be active to withdraw
+                    </p>
+                  )}
                 </div>
               )}
 
