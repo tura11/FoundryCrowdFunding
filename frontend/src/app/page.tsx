@@ -78,7 +78,7 @@ export default function Home() {
             Bring creative projects to life
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Back campaigns you believe in. Connect with creators. Make something awesome happen.
+            Create campaigns you believe in. Connect with creators. Make something awesome happen.
           </p>
           {isConnected && (
             <Link

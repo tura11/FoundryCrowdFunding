@@ -5,10 +5,9 @@ import { useAccount } from 'wagmi';
 import Link from 'next/link';
 import { formatUnits } from 'viem';
 import { useState, useEffect, useMemo } from 'react';
-import { 
-  ArrowLeft, Rocket, TrendingUp, Heart, Wallet, 
-  Clock, Target, Users, DollarSign, CheckCircle,
-  AlertCircle, Plus, ExternalLink, Loader
+import {
+  Rocket, TrendingUp, Heart, Wallet,
+  Clock, Users, Plus, Loader, Coins
 } from 'lucide-react';
 import { useCrowdFunding } from '@/hooks/useCrowdFunding';
 
@@ -16,17 +15,24 @@ export default function Dashboard() {
   const { address, isConnected } = useAccount();
   const [activeTab, setActiveTab] = useState<'created' | 'backed'>('created');
   const [mounted, setMounted] = useState(false);
+
   const { campaignCount, useCampaign, useContribution } = useCrowdFunding();
+
+  const [dashboardStats, setDashboardStats] = useState({
+    created: 0,
+    backed: 0,
+    active: 0,
+  });
+
+  // Campaign IDs usually start from 1 in Solidity contracts (not 0)
+  const allCampaignIds = useMemo(() => {
+    const count = Number(campaignCount || 0);
+    return Array.from({ length: count }, (_, i) => i + 1);
+  }, [campaignCount]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Generate all campaign IDs
-  const allCampaignIds = useMemo(() => {
-    const count = Number(campaignCount || 0);
-    return Array.from({ length: count }, (_, i) => i);
-  }, [campaignCount]);
 
   if (!mounted) {
     return (
@@ -69,7 +75,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -83,15 +88,9 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-6">
               <nav className="hidden md:flex items-center gap-6">
-                <Link href="/" className="text-gray-700 hover:text-gray-900 font-medium">
-                  Discover
-                </Link>
-                <Link href="/dashboard" className="text-green-600 hover:text-green-700 font-medium border-b-2 border-green-600">
-                  Dashboard
-                </Link>
-                <Link href="/create" className="text-gray-700 hover:text-gray-900 font-medium">
-                  Start a project
-                </Link>
+                <Link href="/" className="text-gray-700 hover:text-gray-900 font-medium">Discover</Link>
+                <Link href="/dashboard" className="text-green-600 hover:text-green-700 font-medium border-b-2 border-green-600">Dashboard</Link>
+                <Link href="/create" className="text-gray-700 hover:text-gray-900 font-medium">Start a project</Link>
               </nav>
               <ConnectButton />
             </div>
@@ -100,24 +99,58 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-12">
-        
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Welcome back! 👋
-          </h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Welcome back! 👋</h1>
           <p className="text-lg text-gray-600 font-mono">
             {address?.slice(0, 6)}...{address?.slice(-4)}
           </p>
         </div>
 
-        {/* Stats Cards - with computed values */}
-        <DashboardStats 
-          allCampaignIds={allCampaignIds} 
-          userAddress={address} 
+        {/* Development Tools (only in dev mode) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-6 bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-yellow-900">🧪 Development Tools</p>
+                <p className="text-sm text-yellow-700">Fast-forward time for testing campaign endings</p>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    await (window as any).ethereum.request({
+                      method: 'anvil_increaseTime',
+                      params: [31 * 24 * 60 * 60],
+                    });
+                    await (window as any).ethereum.request({
+                      method: 'anvil_mine',
+                      params: [1],
+                    });
+                    alert('✅ Time fast-forwarded by 31 days!');
+                    window.location.reload();
+                  } catch (err) {
+                    alert('Error: Make sure you are on Anvil local network');
+                  }
+                }}
+                className="px-4 py-2 bg-yellow-500 text-white rounded-lg font-bold hover:bg-yellow-600"
+              >
+                ⚡ +31 Days
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Hidden component that accurately calculates dashboard statistics */}
+        <AccurateStatsCalculator
+          allCampaignIds={allCampaignIds}
+          userAddress={address}
+          setDashboardStats={setDashboardStats}
         />
 
-        {/* Quick Actions */}
+        {/* Statistics Cards */}
+        <DashboardStats allCampaignIds={allCampaignIds} stats={dashboardStats} />
+
+        {/* Quick Action Banner */}
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg p-8 mb-8 text-white shadow-lg">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
@@ -135,183 +168,179 @@ export default function Dashboard() {
         </div>
 
         {/* Tabs */}
-        <CampaignTabs 
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          allCampaignIds={allCampaignIds}
-          userAddress={address}
-        />
+        <div className="flex gap-4 mb-6 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('created')}
+            className={`px-6 py-3 font-bold transition-all ${
+              activeTab === 'created'
+                ? 'text-green-600 border-b-2 border-green-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            My Projects
+          </button>
+          <button
+            onClick={() => setActiveTab('backed')}
+            className={`px-6 py-3 font-bold transition-all ${
+              activeTab === 'backed'
+                ? 'text-green-600 border-b-2 border-green-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Backed Projects
+          </button>
+        </div>
+
+        {/* Campaign Lists */}
+        {activeTab === 'created' ? (
+          <CreatedCampaignsList allCampaignIds={allCampaignIds} userAddress={address} />
+        ) : (
+          <BackedCampaignsList allCampaignIds={allCampaignIds} userAddress={address} />
+        )}
       </main>
     </div>
   );
 }
 
-// ========== DASHBOARD STATS COMPONENT ==========
-function DashboardStats({ allCampaignIds, userAddress }: { 
-  allCampaignIds: number[], 
-  userAddress: `0x${string}` | undefined 
+/* ==============================================
+   Accurate Statistics Calculator (hidden component)
+   ============================================== */
+function AccurateStatsCalculator({
+  allCampaignIds,
+  userAddress,
+  setDashboardStats,
+}: {
+  allCampaignIds: number[];
+  userAddress: `0x${string}` | undefined;
+  setDashboardStats: React.Dispatch<
+    React.SetStateAction<{ created: number; backed: number; active: number }>
+  >;
 }) {
   const { useCampaign, useContribution } = useCrowdFunding();
-  
-  // Calculate stats by iterating through campaigns
-  const stats = useMemo(() => {
-    let createdCount = 0;
-    let backedCount = 0;
-    let totalRaised = BigInt(0);
-    let totalBacked = BigInt(0);
-    let successfulCount = 0;
 
-    allCampaignIds.forEach(id => {
-      // This is a hack to get campaign data - normally we'd fetch all at once
-      // In production, consider using a multicall or backend API
-    });
+  // Fetch all campaign data and user contributions in parallel
+  const campaignQueries = allCampaignIds.map((id) => useCampaign(id));
+  const contributionQueries = allCampaignIds.map((id) => useContribution(id, userAddress));
 
-    return {
-      createdCount,
-      backedCount,
-      totalRaised: Number(formatUnits(totalRaised, 6)),
-      totalBacked: Number(formatUnits(totalBacked, 6)),
-      successRate: createdCount > 0 ? (successfulCount / createdCount) * 100 : 0
-    };
-  }, [allCampaignIds, userAddress]);
+  useEffect(() => {
+    if (!userAddress || allCampaignIds.length === 0) {
+      setDashboardStats({ created: 0, backed: 0, active: 0 });
+      return;
+    }
 
+    let created = 0;
+    let backed = 0;
+    let active = 0;
+
+    for (let i = 0; i < allCampaignIds.length; i++) {
+      const campaign = campaignQueries[i].data;
+      const contribution = contributionQueries[i].data;
+
+      if (!campaign) continue; // Skip if data not loaded yet
+
+      const { creator, duration } = campaign as any;
+      const contribAmount = contribution ? BigInt(contribution.toString() || '0') : BigInt(0);
+
+      // Count created campaigns
+      if (creator?.toLowerCase() === userAddress.toLowerCase()) {
+        created++;
+
+        // Check if the campaign is still active
+        const now = Date.now();
+        const endTime = Number(duration) * 1000;
+        if (now < endTime) {
+          active++;
+        }
+      }
+
+      // Count backed campaigns
+      if (contribAmount > BigInt(0)) {
+        backed++;
+      }
+    }
+
+    setDashboardStats({ created, backed, active });
+  }, [
+    allCampaignIds,
+    userAddress,
+    campaignQueries.map(q => q.data), // Re-run when any campaign data changes
+    contributionQueries.map(q => q.data), // Re-run when any contribution data changes
+  ]);
+
+  return null; // This component renders nothing
+}
+
+/* ==============================================
+   Dashboard Statistics Cards
+   ============================================== */
+function DashboardStats({
+  allCampaignIds,
+  stats,
+}: {
+  allCampaignIds: number[];
+  stats: { created: number; backed: number; active: number };
+}) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-      <StatCard
-        icon={<Rocket className="w-6 h-6" />}
-        label="Campaigns"
-        value={allCampaignIds.length}
-        color="blue"
-      />
-      <StatCard
-        icon={<Heart className="w-6 h-6" />}
-        label="Active"
-        value="—"
-        color="green"
-      />
-      <StatCard
-        icon={<DollarSign className="w-6 h-6" />}
-        label="View individual"
-        value="campaigns"
-        color="purple"
-      />
-      <StatCard
-        icon={<TrendingUp className="w-6 h-6" />}
-        label="for detailed"
-        value="stats"
-        color="orange"
-      />
+      <StatCard icon={<Rocket className="w-6 h-6" />} label="Total Campaigns" value={allCampaignIds.length} color="blue" />
+      <StatCard icon={<Heart className="w-6 h-6" />} label="My Projects" value={stats.created} color="green" />
+      <StatCard icon={<Coins className="w-6 h-6" />} label="Backed" value={stats.backed} color="purple" />
+      <StatCard icon={<TrendingUp className="w-6 h-6" />} label="Active" value={stats.active} color="orange" />
     </div>
   );
 }
 
-// ========== CAMPAIGN TABS COMPONENT ==========
-function CampaignTabs({ 
-  activeTab, 
-  setActiveTab, 
+/* ==============================================
+   Created Campaigns List
+   ============================================== */
+function CreatedCampaignsList({
   allCampaignIds,
-  userAddress 
+  userAddress,
 }: {
-  activeTab: 'created' | 'backed',
-  setActiveTab: (tab: 'created' | 'backed') => void,
-  allCampaignIds: number[],
-  userAddress: `0x${string}` | undefined
+  allCampaignIds: number[];
+  userAddress: `0x${string}` | undefined;
 }) {
-  const { useCampaign, useContribution } = useCrowdFunding();
-
-  return (
-    <>
-      <div className="flex gap-4 mb-6 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('created')}
-          className={`px-6 py-3 font-bold transition-all ${
-            activeTab === 'created'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          My Projects
-        </button>
-        <button
-          onClick={() => setActiveTab('backed')}
-          className={`px-6 py-3 font-bold transition-all ${
-            activeTab === 'backed'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Backed Projects
-        </button>
-      </div>
-
-      {/* Campaign Lists */}
-      {activeTab === 'created' && (
-        <CampaignList 
-          allCampaignIds={allCampaignIds}
-          filterType="created"
-          userAddress={userAddress}
-        />
-      )}
-
-      {activeTab === 'backed' && (
-        <CampaignList 
-          allCampaignIds={allCampaignIds}
-          filterType="backed"
-          userAddress={userAddress}
-        />
-      )}
-    </>
-  );
-}
-
-// ========== CAMPAIGN LIST COMPONENT ==========
-function CampaignList({ 
-  allCampaignIds, 
-  filterType,
-  userAddress 
-}: { 
-  allCampaignIds: number[], 
-  filterType: 'created' | 'backed',
-  userAddress: `0x${string}` | undefined 
-}) {
-  const filteredCampaigns = allCampaignIds.filter(id => {
-    // For now, show all campaigns
-    // In a real implementation, we'd check campaign.creator or contribution amount
-    return true;
-  });
-
-  if (filteredCampaigns.length === 0) {
-    return (
-      <EmptyState
-        icon={filterType === 'created' ? <Rocket className="w-16 h-16" /> : <Heart className="w-16 h-16" />}
-        title={filterType === 'created' ? "No campaigns created yet" : "No backed campaigns yet"}
-        description={filterType === 'created' 
-          ? "Start your first campaign and share your vision with the world"
-          : "Support projects you believe in and be part of something great"}
-        actionLabel={filterType === 'created' ? "Create Campaign" : "Discover Projects"}
-        actionLink={filterType === 'created' ? "/create" : "/"}
-      />
-    );
-  }
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {filteredCampaigns.map((id) => (
-        filterType === 'created' 
-          ? <CreatorCampaignCard key={id} campaignId={id} userAddress={userAddress} />
-          : <BackerCampaignCard key={id} campaignId={id} userAddress={userAddress} />
+      {allCampaignIds.map((id) => (
+        <CreatorCampaignCard key={id} campaignId={id} userAddress={userAddress} />
       ))}
     </div>
   );
 }
 
-// ========== COMPONENTS ==========
+/* ==============================================
+   Backed Campaigns List
+   ============================================== */
+function BackedCampaignsList({
+  allCampaignIds,
+  userAddress,
+}: {
+  allCampaignIds: number[];
+  userAddress: `0x${string}` | undefined;
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {allCampaignIds.map((id) => (
+        <BackerCampaignCard key={id} campaignId={id} userAddress={userAddress} />
+      ))}
+    </div>
+  );
+}
 
-function StatCard({ icon, label, value, color }: { 
-  icon: React.ReactNode, 
-  label: string, 
-  value: string | number, 
-  color: 'blue' | 'green' | 'purple' | 'orange' 
+/* ==============================================
+   Shared UI Components
+   ============================================== */
+function StatCard({
+  icon,
+  label,
+  value,
+  color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  color: 'blue' | 'green' | 'purple' | 'orange';
 }) {
   const colors: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-600',
@@ -331,41 +360,22 @@ function StatCard({ icon, label, value, color }: {
   );
 }
 
-function EmptyState({ icon, title, description, actionLabel, actionLink }: { 
-  icon: React.ReactNode, 
-  title: string, 
-  description: string, 
-  actionLabel: string, 
-  actionLink: string 
-}) {
-  return (
-    <div className="text-center py-20 bg-white rounded-lg border border-gray-200">
-      <div className="text-gray-300 mx-auto mb-4">{icon}</div>
-      <h3 className="text-2xl font-bold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-600 mb-6 max-w-md mx-auto">{description}</p>
-      <Link
-        href={actionLink}
-        className="inline-flex items-center gap-2 px-6 py-3 bg-green-500 text-white font-bold rounded-full hover:bg-green-600 transition-all shadow-lg"
-      >
-        {actionLabel}
-      </Link>
-    </div>
-  );
-}
-
-function CreatorCampaignCard({ 
-  campaignId, 
-  userAddress 
-}: { 
-  campaignId: number, 
-  userAddress: `0x${string}` | undefined 
+/* ==============================================
+   Creator Campaign Card
+   ============================================== */
+function CreatorCampaignCard({
+  campaignId,
+  userAddress,
+}: {
+  campaignId: number;
+  userAddress: `0x${string}` | undefined;
 }) {
   const { useCampaign, useTotalContributors } = useCrowdFunding();
   const { data: campaign, isLoading } = useCampaign(campaignId);
   const { data: totalBackers } = useTotalContributors(campaignId);
 
   const [savedImage, setSavedImage] = useState<string | null>(null);
-  
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const img = localStorage.getItem(`campaign-${campaignId}-image`);
@@ -373,66 +383,48 @@ function CreatorCampaignCard({
     }
   }, [campaignId]);
 
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
-        <div className="h-48 bg-gray-200 rounded mb-4"></div>
-        <div className="h-6 bg-gray-200 rounded mb-2"></div>
-        <div className="h-4 bg-gray-200 rounded"></div>
-      </div>
-    );
-  }
-
-  if (!campaign) return null;
+  if (isLoading || !campaign) return null;
 
   const { title, goal, raised, duration, creator } = campaign as any;
 
-  // Check if this campaign was created by the current user
   const isCreator = userAddress && creator?.toLowerCase() === userAddress.toLowerCase();
-  if (!isCreator) return null; // Don't show if not creator
+  if (!isCreator) return null;
 
-  const progress = Number(raised || 0) > 0 
-    ? (Number(raised || 0) / Number(goal || 1)) * 100 
-    : 0;
-  
+  const progress = Number(raised || 0) > 0 ? (Number(raised) / Number(goal || 1)) * 100 : 0;
   const goalFormatted = formatUnits(goal || BigInt(0), 6);
   const raisedFormatted = formatUnits(raised || BigInt(0), 6);
-  
+
   const durationDate = new Date(Number(duration) * 1000);
   const now = new Date();
   const daysLeft = Math.max(0, Math.ceil((durationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
   const isActive = now < durationDate;
+  const canWithdraw = !isActive && progress >= 100;
 
   return (
     <article className="bg-white rounded-lg border border-gray-200 hover:shadow-xl transition-all overflow-hidden group">
-      
-      {/* Image */}
       <div className="relative h-48 overflow-hidden">
         {savedImage ? (
-          <img 
-            src={savedImage} 
-            alt={title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+          <img src={savedImage} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
-            <div className="text-white text-6xl font-bold opacity-20">
-              {title?.charAt(0) || '?'}
-            </div>
+            <div className="text-white text-6xl font-bold opacity-20">{title?.charAt(0) || '?'}</div>
           </div>
         )}
         <div className="absolute top-4 right-4 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-bold">
           CREATOR
         </div>
+        {canWithdraw && (
+          <div className="absolute top-4 left-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+            ✓ Can Withdraw
+          </div>
+        )}
       </div>
 
-      {/* Content */}
       <div className="p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4 group-hover:text-green-600 transition-colors line-clamp-2">
           {title}
         </h3>
 
-        {/* Progress */}
         <div className="mb-4">
           <div className="flex justify-between items-end mb-2">
             <div>
@@ -444,26 +436,20 @@ function CreatorCampaignCard({
               </div>
             </div>
             <div className="text-right">
-              <div className="text-lg font-bold text-gray-700">
-                {progress.toFixed(0)}%
-              </div>
+              <div className="text-lg font-bold text-gray-700">{progress.toFixed(0)}%</div>
               <div className="text-sm text-gray-500">funded</div>
             </div>
           </div>
 
           <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-            <div 
-              className="bg-green-500 h-2 rounded-full transition-all"
-              style={{ width: `${Math.min(progress, 100)}%` }}
-            />
+            <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
           </div>
         </div>
 
-        {/* Stats */}
         <div className="flex justify-between items-center text-sm mb-4 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-2 text-gray-600">
             <Clock className="w-4 h-4" />
-            <span>{daysLeft} days left</span>
+            <span>{isActive ? `${daysLeft} days left` : 'Ended'}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <Users className="w-4 h-4" />
@@ -471,31 +457,33 @@ function CreatorCampaignCard({
           </div>
         </div>
 
-        {/* Actions */}
         <Link
           href={`/campaign/${campaignId}`}
           className="block w-full bg-green-500 text-white py-3 rounded-lg text-sm font-bold hover:bg-green-600 transition-all text-center"
         >
-          {isActive ? 'Manage Campaign' : 'View & Withdraw'}
+          {canWithdraw ? '💰 Withdraw Funds' : 'Manage Campaign'}
         </Link>
       </div>
     </article>
   );
 }
 
-function BackerCampaignCard({ 
+/* ==============================================
+   Backer Campaign Card
+   ============================================== */
+function BackerCampaignCard({
   campaignId,
-  userAddress 
-}: { 
-  campaignId: number,
-  userAddress: `0x${string}` | undefined 
+  userAddress,
+}: {
+  campaignId: number;
+  userAddress: `0x${string}` | undefined;
 }) {
   const { useCampaign, useContribution } = useCrowdFunding();
   const { data: campaign, isLoading } = useCampaign(campaignId);
   const { data: myContribution } = useContribution(campaignId, userAddress);
 
   const [savedImage, setSavedImage] = useState<string | null>(null);
-  
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const img = localStorage.getItem(`campaign-${campaignId}-image`);
@@ -503,37 +491,19 @@ function BackerCampaignCard({
     }
   }, [campaignId]);
 
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
-        <div className="h-48 bg-gray-200 rounded mb-4"></div>
-        <div className="h-6 bg-gray-200 rounded mb-2"></div>
-        <div className="h-4 bg-gray-200 rounded"></div>
-      </div>
-    );
-  }
+  if (isLoading || !campaign) return null;
 
-  if (!campaign) return null;
-
-  // Check if user contributed
   const contributionAmount = myContribution ? BigInt(myContribution.toString()) : BigInt(0);
   const hasContributed = contributionAmount > BigInt(0);
-  if (!hasContributed) return null; // Don't show if not a backer
+  if (!hasContributed) return null;
 
-  const campaignData = campaign as any;
-  const title = campaignData.title || '';
-  const goal = campaignData.goal || BigInt(0);
-  const raised = campaignData.raised || BigInt(0);
-  const duration = campaignData.duration || BigInt(0);
-  
-  const progress = Number(raised) > 0 
-    ? (Number(raised) / Number(goal || 1)) * 100 
-    : 0;
-  
+  const { title, goal, raised, duration } = campaign as any;
+
+  const progress = Number(raised) > 0 ? (Number(raised) / Number(goal || 1)) * 100 : 0;
   const goalFormatted = formatUnits(goal, 6);
   const raisedFormatted = formatUnits(raised, 6);
   const contributionFormatted = formatUnits(contributionAmount, 6);
-  
+
   const durationDate = new Date(Number(duration) * 1000);
   const now = new Date();
   const daysLeft = Math.max(0, Math.ceil((durationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
@@ -542,35 +512,30 @@ function BackerCampaignCard({
 
   return (
     <article className="bg-white rounded-lg border border-gray-200 hover:shadow-xl transition-all overflow-hidden group">
-      
-      {/* Image */}
       <div className="relative h-48 overflow-hidden">
         {savedImage ? (
-          <img 
-            src={savedImage} 
-            alt={title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+          <img src={savedImage} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center">
-            <div className="text-white text-6xl font-bold opacity-20">
-              {title?.charAt(0) || '?'}
-            </div>
+            <div className="text-white text-6xl font-bold opacity-20">{title?.charAt(0) || '?'}</div>
           </div>
         )}
         <div className="absolute top-4 right-4 bg-white text-blue-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
           <Heart className="w-3 h-3 fill-current" />
           BACKED
         </div>
+        {hasFailed && (
+          <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold">
+            💸 Refund Available
+          </div>
+        )}
       </div>
 
-      {/* Content */}
       <div className="p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4 group-hover:text-green-600 transition-colors line-clamp-2">
           {title}
         </h3>
 
-        {/* My Contribution */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
           <div className="flex justify-between items-center">
             <span className="text-sm text-blue-700 font-medium">Your pledge</span>
@@ -580,7 +545,6 @@ function BackerCampaignCard({
           </div>
         </div>
 
-        {/* Progress */}
         <div className="mb-4">
           <div className="flex justify-between items-center mb-2">
             <div className="text-lg font-bold text-gray-900">
@@ -592,33 +556,27 @@ function BackerCampaignCard({
           </div>
 
           <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-            <div 
-              className="bg-green-500 h-2 rounded-full transition-all"
-              style={{ width: `${Math.min(progress, 100)}%` }}
-            />
+            <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
           </div>
         </div>
 
-        {/* Stats */}
         <div className="flex justify-between items-center text-sm text-gray-600 mb-4 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4" />
-            <span>{daysLeft} days left</span>
+            <span>{isActive ? `${daysLeft} days left` : 'Ended'}</span>
           </div>
           {hasFailed && (
             <span className="text-red-600 font-medium flex items-center gap-1">
-              <AlertCircle className="w-4 h-4" />
-              Refund available
+              Failed
             </span>
           )}
         </div>
 
-        {/* Actions */}
         <Link
           href={`/campaign/${campaignId}`}
           className="block w-full bg-green-500 text-white py-3 rounded-lg text-sm font-bold hover:bg-green-600 transition-all text-center"
         >
-          {hasFailed ? 'Claim Refund' : 'View Campaign'}
+          {hasFailed ? '💸 Get Refund' : 'View Campaign'}
         </Link>
       </div>
     </article>
