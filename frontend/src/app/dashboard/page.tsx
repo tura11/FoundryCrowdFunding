@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'created' | 'backed'>('created');
   const [mounted, setMounted] = useState(false);
 
-  const { campaignCount, useCampaign, useContribution } = useCrowdFunding();
+  const { campaignCount } = useCrowdFunding();
 
   const [dashboardStats, setDashboardStats] = useState({
     created: 0,
@@ -24,10 +24,17 @@ export default function Dashboard() {
     active: 0,
   });
 
-  // Campaign IDs usually start from 1 in Solidity contracts (not 0)
+  const [statsReady, setStatsReady] = useState(false);
+
+  // Reset przy zmianie
+  useEffect(() => {
+    setDashboardStats({ created: 0, backed: 0, active: 0 });
+    setStatsReady(false);
+  }, [address, campaignCount]);
+
   const allCampaignIds = useMemo(() => {
     const count = Number(campaignCount || 0);
-    return Array.from({ length: count }, (_, i) => i + 1);
+    return Array.from({ length: count }, (_, i) => i); // ID od 0, jak w Twoim kontrakcie
   }, [campaignCount]);
 
   useEffect(() => {
@@ -75,7 +82,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -99,7 +105,6 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-12">
-        {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Welcome back! 👋</h1>
           <p className="text-lg text-gray-600 font-mono">
@@ -107,50 +112,15 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Development Tools (only in dev mode) */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mb-6 bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-bold text-yellow-900">🧪 Development Tools</p>
-                <p className="text-sm text-yellow-700">Fast-forward time for testing campaign endings</p>
-              </div>
-              <button
-                onClick={async () => {
-                  try {
-                    await (window as any).ethereum.request({
-                      method: 'anvil_increaseTime',
-                      params: [31 * 24 * 60 * 60],
-                    });
-                    await (window as any).ethereum.request({
-                      method: 'anvil_mine',
-                      params: [1],
-                    });
-                    alert('✅ Time fast-forwarded by 31 days!');
-                    window.location.reload();
-                  } catch (err) {
-                    alert('Error: Make sure you are on Anvil local network');
-                  }
-                }}
-                className="px-4 py-2 bg-yellow-500 text-white rounded-lg font-bold hover:bg-yellow-600"
-              >
-                ⚡ +31 Days
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Hidden component that accurately calculates dashboard statistics */}
-        <AccurateStatsCalculator
+        <StatsCalculator
           allCampaignIds={allCampaignIds}
           userAddress={address}
           setDashboardStats={setDashboardStats}
+          setStatsReady={setStatsReady}
         />
 
-        {/* Statistics Cards */}
-        <DashboardStats allCampaignIds={allCampaignIds} stats={dashboardStats} />
+        <DashboardStats allCampaignIds={allCampaignIds} stats={dashboardStats} statsReady={statsReady} />
 
-        {/* Quick Action Banner */}
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg p-8 mb-8 text-white shadow-lg">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
@@ -167,31 +137,21 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-4 mb-6 border-b border-gray-200">
           <button
             onClick={() => setActiveTab('created')}
-            className={`px-6 py-3 font-bold transition-all ${
-              activeTab === 'created'
-                ? 'text-green-600 border-b-2 border-green-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-6 py-3 font-bold transition-all ${activeTab === 'created' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-600 hover:text-gray-900'}`}
           >
             My Projects
           </button>
           <button
             onClick={() => setActiveTab('backed')}
-            className={`px-6 py-3 font-bold transition-all ${
-              activeTab === 'backed'
-                ? 'text-green-600 border-b-2 border-green-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-6 py-3 font-bold transition-all ${activeTab === 'backed' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-600 hover:text-gray-900'}`}
           >
             Backed Projects
           </button>
         </div>
 
-        {/* Campaign Lists */}
         {activeTab === 'created' ? (
           <CreatedCampaignsList allCampaignIds={allCampaignIds} userAddress={address} />
         ) : (
@@ -203,134 +163,102 @@ export default function Dashboard() {
 }
 
 /* ==============================================
-   Accurate Statistics Calculator (hidden component)
+   StatsCalculator – czeka na WSZYSTKIE kampanie, potem ustawia liczby naraz
    ============================================== */
-function AccurateStatsCalculator({
+function StatsCalculator({
   allCampaignIds,
   userAddress,
   setDashboardStats,
+  setStatsReady,
 }: {
   allCampaignIds: number[];
   userAddress: `0x${string}` | undefined;
-  setDashboardStats: React.Dispatch<
-    React.SetStateAction<{ created: number; backed: number; active: number }>
-  >;
+  setDashboardStats: React.Dispatch<React.SetStateAction<{ created: number; backed: number; active: number }>>;
+  setStatsReady: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { useCampaign, useContribution } = useCrowdFunding();
 
-  // Fetch all campaign data and user contributions in parallel
-  const campaignQueries = allCampaignIds.map((id) => useCampaign(id));
-  const contributionQueries = allCampaignIds.map((id) => useContribution(id, userAddress));
+  const queries = allCampaignIds.map((id) => ({
+    campaign: useCampaign(id),
+    contribution: useContribution(id, userAddress),
+  }));
 
   useEffect(() => {
     if (!userAddress || allCampaignIds.length === 0) {
       setDashboardStats({ created: 0, backed: 0, active: 0 });
+      setStatsReady(true);
       return;
     }
 
     let created = 0;
     let backed = 0;
     let active = 0;
+    let loadedCount = 0;
 
-    for (let i = 0; i < allCampaignIds.length; i++) {
-      const campaign = campaignQueries[i].data;
-      const contribution = contributionQueries[i].data;
+    queries.forEach(({ campaign, contribution }) => {
+      if (campaign.data && contribution.data !== undefined) {
+        loadedCount++;
 
-      if (!campaign) continue; // Skip if data not loaded yet
+        const { creator, duration } = campaign.data as any;
+        const contribAmount = contribution.data ? BigInt(contribution.data.toString()) : BigInt(0);
 
-      const { creator, duration } = campaign as any;
-      const contribAmount = contribution ? BigInt(contribution.toString() || '0') : BigInt(0);
-
-      // Count created campaigns
-      if (creator?.toLowerCase() === userAddress.toLowerCase()) {
-        created++;
-
-        // Check if the campaign is still active
-        const now = Date.now();
-        const endTime = Number(duration) * 1000;
-        if (now < endTime) {
-          active++;
+        if (creator?.toLowerCase() === userAddress.toLowerCase()) {
+          created++;
+          const now = Date.now();
+          const endTime = Number(duration) * 1000;
+          if (now < endTime) active++;
         }
-      }
 
-      // Count backed campaigns
-      if (contribAmount > BigInt(0)) {
-        backed++;
+        if (contribAmount > BigInt(0)) backed++;
       }
+    });
+
+    if (loadedCount === allCampaignIds.length) {
+      setDashboardStats({ created, backed, active });
+      setStatsReady(true);
     }
+  }, [queries, userAddress, allCampaignIds.length, setDashboardStats, setStatsReady]);
 
-    setDashboardStats({ created, backed, active });
-  }, [
-    allCampaignIds,
-    userAddress,
-    campaignQueries.map(q => q.data), // Re-run when any campaign data changes
-    contributionQueries.map(q => q.data), // Re-run when any contribution data changes
-  ]);
-
-  return null; // This component renders nothing
+  return null;
 }
 
 /* ==============================================
-   Dashboard Statistics Cards
+   Dashboard Stats – pokazuje "-" dopóki nie załaduje się WSZYSTKO
    ============================================== */
 function DashboardStats({
   allCampaignIds,
   stats,
+  statsReady,
 }: {
   allCampaignIds: number[];
   stats: { created: number; backed: number; active: number };
+  statsReady: boolean;
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
       <StatCard icon={<Rocket className="w-6 h-6" />} label="Total Campaigns" value={allCampaignIds.length} color="blue" />
-      <StatCard icon={<Heart className="w-6 h-6" />} label="My Projects" value={stats.created} color="green" />
-      <StatCard icon={<Coins className="w-6 h-6" />} label="Backed" value={stats.backed} color="purple" />
-      <StatCard icon={<TrendingUp className="w-6 h-6" />} label="Active" value={stats.active} color="orange" />
+      <StatCard 
+        icon={statsReady ? <Heart className="w-6 h-6" /> : <Loader className="w-6 h-6 animate-spin" />}
+        label="My Projects" 
+        value={statsReady ? stats.created : '-'} 
+        color="green" 
+      />
+      <StatCard 
+        icon={statsReady ? <Coins className="w-6 h-6" /> : <Loader className="w-6 h-6 animate-spin" />}
+        label="Backed" 
+        value={statsReady ? stats.backed : '-'} 
+        color="purple" 
+      />
+      <StatCard 
+        icon={statsReady ? <TrendingUp className="w-6 h-6" /> : <Loader className="w-6 h-6 animate-spin" />}
+        label="Active" 
+        value={statsReady ? stats.active : '-'} 
+        color="orange" 
+      />
     </div>
   );
 }
 
-/* ==============================================
-   Created Campaigns List
-   ============================================== */
-function CreatedCampaignsList({
-  allCampaignIds,
-  userAddress,
-}: {
-  allCampaignIds: number[];
-  userAddress: `0x${string}` | undefined;
-}) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {allCampaignIds.map((id) => (
-        <CreatorCampaignCard key={id} campaignId={id} userAddress={userAddress} />
-      ))}
-    </div>
-  );
-}
-
-/* ==============================================
-   Backed Campaigns List
-   ============================================== */
-function BackedCampaignsList({
-  allCampaignIds,
-  userAddress,
-}: {
-  allCampaignIds: number[];
-  userAddress: `0x${string}` | undefined;
-}) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {allCampaignIds.map((id) => (
-        <BackerCampaignCard key={id} campaignId={id} userAddress={userAddress} />
-      ))}
-    </div>
-  );
-}
-
-/* ==============================================
-   Shared UI Components
-   ============================================== */
 function StatCard({
   icon,
   label,
@@ -360,9 +288,38 @@ function StatCard({
   );
 }
 
-/* ==============================================
-   Creator Campaign Card
-   ============================================== */
+function CreatedCampaignsList({
+  allCampaignIds,
+  userAddress,
+}: {
+  allCampaignIds: number[];
+  userAddress: `0x${string}` | undefined;
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {allCampaignIds.map((id) => (
+        <CreatorCampaignCard key={id} campaignId={id} userAddress={userAddress} />
+      ))}
+    </div>
+  );
+}
+
+function BackedCampaignsList({
+  allCampaignIds,
+  userAddress,
+}: {
+  allCampaignIds: number[];
+  userAddress: `0x${string}` | undefined;
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {allCampaignIds.map((id) => (
+        <BackerCampaignCard key={id} campaignId={id} userAddress={userAddress} />
+      ))}
+    </div>
+  );
+}
+
 function CreatorCampaignCard({
   campaignId,
   userAddress,
@@ -468,9 +425,6 @@ function CreatorCampaignCard({
   );
 }
 
-/* ==============================================
-   Backer Campaign Card
-   ============================================== */
 function BackerCampaignCard({
   campaignId,
   userAddress,

@@ -1,7 +1,3 @@
-// Ten plik nie wymaga zmian - nie ma tam żadnych transakcji
-// Zostaw go jak jest, bo działa świetnie
-// Wszystkie alert() są tylko w campaign detail i create page
-
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -9,7 +5,7 @@ import { useCrowdFunding } from '@/hooks/useCrowdFunding';
 import { useAccount } from 'wagmi';
 import Link from 'next/link';
 import { formatUnits } from 'viem';
-import { Rocket, Plus, TrendingUp, Clock, Target, Users, Heart, DollarSign } from 'lucide-react';
+import { Rocket, Plus, Heart } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function Home() {
@@ -35,12 +31,10 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      
-      {/* Kickstarter-style Header */}
+      {/* Header – bez zmian */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
-            {/* Logo */}
             <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
                 <Rocket className="w-6 h-6 text-white" />
@@ -48,7 +42,6 @@ export default function Home() {
               <span className="text-2xl font-bold text-gray-900">CrowdFund</span>
             </Link>
 
-            {/* Nav */}
             <div className="flex items-center gap-6">
               <nav className="hidden md:flex items-center gap-6">
                 <Link href="/" className="text-gray-700 hover:text-gray-900 font-medium">
@@ -71,7 +64,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* Hero Section – bez zmian */}
       <section className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-16 text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-4">
@@ -114,7 +107,6 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-12">
-        
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-3xl font-bold text-gray-900">
             Projects we love
@@ -155,13 +147,11 @@ export default function Home() {
         )}
 
         {/* Campaign Grid */}
-        {campaignIds.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {campaignIds.map((id) => (
-              <CampaignCard key={id} campaignId={id} />
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {campaignIds.map((id) => (
+            <CampaignCard key={id} campaignId={id} />
+          ))}
+        </div>
       </main>
 
       {/* Footer */}
@@ -177,6 +167,7 @@ export default function Home() {
   );
 }
 
+// CampaignCard – z skeletonem i bez błędów hooków
 function CampaignCard({ campaignId }: { campaignId: number }) {
   const { useCampaign } = useCrowdFunding();
   const { data: campaign, isLoading } = useCampaign(campaignId);
@@ -206,13 +197,16 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
   if (!campaign) return null;
 
   const campaignData = campaign as any;
-  const title = campaignData.title || 'Untitled';
+
+  if (!campaignData.title || campaignData.title === '' || campaignData.goal === BigInt(0)) {
+    return null;
+  }
+
+  const title = campaignData.title;
   const goal = campaignData.goal || BigInt(0);
   const raised = campaignData.raised || BigInt(0);
   const duration = campaignData.duration || BigInt(0);
   const description = campaignData.description || 'No description';
-  const creator = campaignData.creator || '0x0000000000000000000000000000000000000000';
-  const state = campaignData.state !== undefined ? campaignData.state : 0;
   
   const progress = Number(raised) > 0 ? (Number(raised) / Number(goal)) * 100 : 0;
   const goalFormatted = formatUnits(goal, 6);
@@ -226,8 +220,6 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
   return (
     <Link href={`/campaign/${campaignId}`} className="group">
       <article className="bg-white rounded-lg overflow-hidden border border-gray-200 hover:shadow-xl transition-all duration-300">
-        
-        {/* Image */}
         <div className="relative h-64 overflow-hidden">
           {savedImage ? (
             <img 
@@ -242,15 +234,8 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
               </div>
             </div>
           )}
-          <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity"></div>
-          {state === 1 && (
-            <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold">
-              ✓ Funded
-            </div>
-          )}
         </div>
 
-        {/* Content */}
         <div className="p-6">
           <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-green-600 transition-colors line-clamp-2">
             {title}
@@ -260,13 +245,6 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
             {description}
           </p>
 
-          {/* Creator */}
-          <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
-            <Users className="w-4 h-4" />
-            <span>by {creator.slice(0, 6)}...{creator.slice(-4)}</span>
-          </div>
-
-          {/* Progress */}
           <div className="mb-4">
             <div className="flex justify-between items-end mb-2">
               <div>
@@ -304,7 +282,6 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
             </div>
           </div>
 
-          {/* Bottom Bar */}
           <div className="pt-4 border-t border-gray-100 flex justify-between items-center text-sm">
             <span className="text-gray-600">{progress.toFixed(0)}% funded</span>
             <span className="text-green-600 font-medium group-hover:underline">
