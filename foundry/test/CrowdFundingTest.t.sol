@@ -595,6 +595,43 @@ contract CrowdFundingTest is Test {
         assertEq(crowdFunding.getContributorTier(campaignId, contributor1), 0, "Contributor should be in tier 0");
     }
 
+        function testContributeCorrectlyUpdatesTierData() public {
+        vm.startPrank(creator);
+
+        // Create tier with only 2 slots
+        CrowdFunding.RewardTier[] memory tiers = new CrowdFunding.RewardTier[](1);
+        tiers[0] = CrowdFunding.RewardTier({
+            name: "Limited",
+            description: "Limited slots",
+            minContribution: 10 * 10**6,
+            maxBackers: 2, // Only 2 slots
+            currentBackers: 0
+        });
+
+        crowdFunding.createCampaign(
+            "Limited Campaign",
+            CAMPAIGN_GOAL,
+            "Description",
+            CAMPAIGN_DURATION,
+            tiers,
+            _createDefaultMilestones()
+        );
+        vm.stopPrank();
+
+     
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), 10 * 10**6);
+        crowdFunding.contribute(0, 10 * 10**6, 0);
+        vm.stopPrank();
+
+        CrowdFunding.RewardTier[] memory updatedTiers = crowdFunding.getCampaignTiers(0);
+        
+  
+        assertEq(crowdFunding.getContributorTier(0, contributor1), 0, "Contributor should be in tier 0");
+        assertEq(updatedTiers[0].currentBackers, 1, "Tier should have 1 backer");
+        assertEq(crowdFunding.getTotalContributors(0), 1, "Should have 1 total contributor");
+    }
+
     // ============================================================================
     // MILESTONE VOTING TESTS
     // ============================================================================
