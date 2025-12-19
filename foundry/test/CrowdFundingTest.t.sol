@@ -632,6 +632,66 @@ contract CrowdFundingTest is Test {
         assertEq(crowdFunding.getTotalContributors(0), 1, "Should have 1 total contributor");
     }
 
+
+    function testContributorCanUpgradeTier() public {
+    vm.startPrank(creator);
+
+    // Create 2 tiers
+    CrowdFunding.RewardTier[] memory tiers = new CrowdFunding.RewardTier[](2);
+    tiers[0] = CrowdFunding.RewardTier({
+        name: "Bronze",
+        description: "Bronze tier",
+        minContribution: 10 * 10**6,
+        maxBackers: 10,
+        currentBackers: 0
+    });
+    tiers[1] = CrowdFunding.RewardTier({
+        name: "Silver",
+        description: "Silver tier",
+        minContribution: 50 * 10**6,
+        maxBackers: 5,
+        currentBackers: 0
+    });
+
+    crowdFunding.createCampaign(
+        "Multi-tier Campaign",
+        CAMPAIGN_GOAL,
+        "Description",
+        CAMPAIGN_DURATION,
+        tiers,
+        _createDefaultMilestones()
+    );
+    vm.stopPrank();
+
+    // ========== First contribution: Bronze tier ==========
+    vm.startPrank(contributor1);
+    usdc.approve(address(crowdFunding), 100 * 10**6);
+    crowdFunding.contribute(0, 10 * 10**6, 0); // Tier 0 (Bronze)
+    vm.stopPrank();
+
+    CrowdFunding.RewardTier[] memory tiersAfterFirst = crowdFunding.getCampaignTiers(0);
+    
+    assertEq(crowdFunding.getContributorTier(0, contributor1), 0, "Should be in Bronze");
+    assertEq(tiersAfterFirst[0].currentBackers, 1, "Bronze should have 1 backer");
+    assertEq(tiersAfterFirst[1].currentBackers, 0, "Silver should have 0 backers");
+
+    // ========== Second contribution: Upgrade to Silver ==========
+    vm.startPrank(contributor1);
+    crowdFunding.contribute(0, 50 * 10**6, 1); // Tier 1 (Silver)
+    vm.stopPrank();
+
+    CrowdFunding.RewardTier[] memory tiersAfterUpgrade = crowdFunding.getCampaignTiers(0);
+    
+    assertEq(crowdFunding.getContributorTier(0, contributor1), 1, "Should be upgraded to Silver");
+    assertEq(tiersAfterUpgrade[0].currentBackers, 0, "Bronze should have 0 backers (moved out)");
+    assertEq(tiersAfterUpgrade[1].currentBackers, 1, "Silver should have 1 backer");
+    assertEq(crowdFunding.getTotalContributors(0), 1, "Still 1 total contributor (same person)");
+    
+    // Check total contribution
+    uint256 totalContribution = crowdFunding.getContribution(0, contributor1);
+    assertEq(totalContribution, 60 * 10**6, "Total contribution should be 10 + 50");
+}
+
     // ============================================================================
     // MILESTONE VOTING TESTS
     // ============================================================================
