@@ -374,6 +374,10 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__AlreadyVoted();
         }
         
+        if (milestone.approved || milestone.fundsReleased) {
+            revert CrowdFunding__MilestoneAlreadyReleased();
+        }
+        
         if (block.timestamp <= campaign.duration) {
             revert CrowdFunding__CampaignStillActive();
         }
@@ -391,10 +395,6 @@ contract CrowdFunding is ReentrancyGuard {
         
         if (block.timestamp > milestoneVotingDeadline[campaignId][milestoneId]) {
             revert CrowdFunding__MilestoneVotingPeriodExpired();
-        }
-        
-        if (milestone.approved || milestone.fundsReleased) {
-            revert CrowdFunding__MilestoneAlreadyReleased();
         }
         
         milestoneVotes[campaignId][milestoneId][msg.sender] = true;
