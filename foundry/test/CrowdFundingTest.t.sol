@@ -859,62 +859,13 @@ contract CrowdFundingTest is Test {
         assertGt(votingDeadlineAfter, 0, "Voting deadline should be initialized");
     }
 
-function test_VoteMilestone_RevertIf_MilestoneAlreadyApproved() public {
-    _createDefaultCampaign();
-
-    // Two contributors only
-    vm.startPrank(contributor1);
-    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
-    vm.stopPrank();
-
-    vm.startPrank(contributor2);
-    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2 + 1);
-    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2 + 1, 0);
-    vm.stopPrank();
-
-    // Verify we have exactly 2 contributors
-    assertEq(crowdFunding.getTotalContributors(0), 2, "Should have 2 contributors");
-
-    // Warp past campaign end and milestone deadline
-    vm.warp(block.timestamp + 61 days);
-
-    // First contributor votes
-    vm.prank(contributor1);
-    crowdFunding.voteMilestone(0, 0, true);
-
-    CrowdFunding.Milestone memory milestoneAfterFirstVote = crowdFunding.getMilestone(0, 0);
-    assertFalse(milestoneAfterFirstVote.approved, "Should NOT be approved after 1/2 votes");
-
-    // Second contributor votes - triggers auto-approval (2/2 = 100%)
-    vm.prank(contributor2);
-    crowdFunding.voteMilestone(0, 0, true);
-
-    // Verify auto-approval happened
-    CrowdFunding.Milestone memory milestoneAfterSecondVote = crowdFunding.getMilestone(0, 0);
-    assertTrue(milestoneAfterSecondVote.approved, "Should be auto-approved after 2/2 votes");
-    assertEq(milestoneAfterSecondVote.votesFor, 2, "Should have 2 votes for");
-
-    // Now add a third contributor who contributed earlier but we "forgot" about
-    // Actually, we can't add new contributors after campaign ends
-    // So let's test with contributor1 trying to vote again (should hit AlreadyVoted first)
-    
-    // Better approach: Create a scenario with 3 contributors where only 2 vote initially
-    // But auto-approval needs ALL contributors to vote...
-    
-    // The issue is: auto-approval only happens when totalVotes >= totalContributors
-    // So we need a different approach: manually finalize the vote
-    
-    // Let's restart with finalizeMilestoneVoting approach
-}
-
 
 /**
  * @dev Test: Cannot vote on already approved milestone (via finalization)
  * Expected: Reverts with CrowdFunding__MilestoneAlreadyReleased
- * Strategy: Use finalizeMilestoneVoting to approve, then contributor tries to vote
+ * Scenario: 3 contributors, 2 vote (66%), finalize after voting period, 3rd tries to vote
  */
-function test_VoteMilestone_RevertIf_MilestoneApprovedViaFinalization() public {
+function test_VoteMilestone_RevertIf_MilestoneAlreadyApproved() public {
     _createDefaultCampaign();
 
     // Three contributors
@@ -947,72 +898,26 @@ function test_VoteMilestone_RevertIf_MilestoneApprovedViaFinalization() public {
     vm.prank(contributor2);
     crowdFunding.voteMilestone(0, 0, true);
 
-    // Check it's not auto-approved yet (only 2/3 voted, not all)
+    // Verify not auto-approved yet (only 2/3 voted)
     CrowdFunding.Milestone memory milestoneBeforeFinalize = crowdFunding.getMilestone(0, 0);
-    assertFalse(milestoneBeforeFinalize.approved, "Should not be auto-approved (not all voted)");
+    assertFalse(milestoneBeforeFinalize.approved, "Should not be auto-approved");
 
-    // Get voting deadline and warp past it
+    // Warp past voting deadline to finalize
     uint256 votingDeadline = crowdFunding.milestoneVotingDeadline(0, 0);
-    assertGt(votingDeadline, 0, "Voting deadline should be set");
     vm.warp(votingDeadline + 1);
 
-    // Finalize voting - this will approve it (66% > 51%)
+    // Finalize voting (66% > 51% = approved)
     crowdFunding.finalizeMilestoneVoting(0, 0);
 
     CrowdFunding.Milestone memory milestoneAfterFinalize = crowdFunding.getMilestone(0, 0);
     assertTrue(milestoneAfterFinalize.approved, "Should be approved after finalization");
 
-    // Now contributor3 tries to vote but voting period has expired
-    // This will hit MilestoneVotingPeriodExpired first
-    
-    // So we need to test the check BEFORE voting period expires
-    // But milestone is only approved AFTER voting period expires...
-    
-    // This is a logical impossibility in the current contract design!
-}
-
-/**
- * @dev Test: Cannot vote on milestone with funds already released
- * Expected: Reverts with CrowdFunding__MilestoneAlreadyReleased
- * Note: This test is also problematic because voting period must expire before finalization
- */
-function test_VoteMilestone_RevertIf_MilestoneFundsReleased() public {
-    _createDefaultCampaign();
-
-    // Two contributors - will vote and auto-approve
-    vm.startPrank(contributor1);
-    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
-    vm.stopPrank();
-
-    vm.startPrank(contributor2);
-    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2 + 1);
-    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2 + 1, 0);
-    vm.stopPrank();
-
-    vm.warp(block.timestamp + 61 days);
-
-    // Both vote - auto-approves (2/2 = 100%)
-    vm.prank(contributor1);
+    // ✅ NOW WITH FIX: contributor3 tries to vote on APPROVED milestone
+    // This should hit MilestoneAlreadyReleased BEFORE VotingPeriodExpired
+    vm.startPrank(contributor3);
+    vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneAlreadyReleased.selector);
     crowdFunding.voteMilestone(0, 0, true);
-    
-    vm.prank(contributor2);
-    crowdFunding.voteMilestone(0, 0, true);
-
-    CrowdFunding.Milestone memory milestone = crowdFunding.getMilestone(0, 0);
-    assertTrue(milestone.approved, "Should be auto-approved");
-
-    // Release funds
-    vm.prank(creator);
-    crowdFunding.releaseMilestoneFunds(0, 0);
-
-    milestone = crowdFunding.getMilestone(0, 0);
-    assertTrue(milestone.fundsReleased, "Funds should be released");
-
-    // Problem: Can't add new contributor after campaign ends
-    // And existing contributors already voted (AlreadyVoted)
-    
-    // This check is unreachable in normal flow!
+    vm.stopPrank();
 }
 
 
