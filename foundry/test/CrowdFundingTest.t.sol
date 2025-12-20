@@ -912,13 +912,66 @@ function test_VoteMilestone_RevertIf_MilestoneAlreadyApproved() public {
     CrowdFunding.Milestone memory milestoneAfterFinalize = crowdFunding.getMilestone(0, 0);
     assertTrue(milestoneAfterFinalize.approved, "Should be approved after finalization");
 
-    // ✅ NOW WITH FIX: contributor3 tries to vote on APPROVED milestone
-    // This should hit MilestoneAlreadyReleased BEFORE VotingPeriodExpired
+
     vm.startPrank(contributor3);
     vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneAlreadyReleased.selector);
     crowdFunding.voteMilestone(0, 0, true);
     vm.stopPrank();
 }
+/**
+ * @dev Test: Cannot vote on milestone with funds already released
+ * Expected: Reverts with CrowdFunding__MilestoneAlreadyReleased
+ * Scenario: Milestone approved and funds released, contributor tries to vote
+ */
+function test_VoteMilestone_RevertIf_MilestoneFundsReleased() public {
+    _createDefaultCampaign();
+
+    // Three contributors
+    vm.startPrank(contributor1);
+    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 3);
+    crowdFunding.contribute(0, CAMPAIGN_GOAL / 3, 0);
+    vm.stopPrank();
+
+    vm.startPrank(contributor2);
+    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 3);
+    crowdFunding.contribute(0, CAMPAIGN_GOAL / 3, 0);
+    vm.stopPrank();
+
+    address contributor3 = makeAddr("contributor3");
+    usdc.mint(contributor3, INITIAL_BALANCE);
+    vm.startPrank(contributor3);
+    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 3 + 1);
+    crowdFunding.contribute(0, CAMPAIGN_GOAL / 3 + 1, 0);
+    vm.stopPrank();
+
+    vm.warp(block.timestamp + 61 days);
+
+    // Two vote
+    vm.prank(contributor1);
+    crowdFunding.voteMilestone(0, 0, true);
+    
+    vm.prank(contributor2);
+    crowdFunding.voteMilestone(0, 0, true);
+
+    // Finalize
+    uint256 votingDeadline = crowdFunding.milestoneVotingDeadline(0, 0);
+    vm.warp(votingDeadline + 1);
+    crowdFunding.finalizeMilestoneVoting(0, 0);
+
+    // Release funds
+    vm.prank(creator);
+    crowdFunding.releaseMilestoneFunds(0, 0);
+
+    CrowdFunding.Milestone memory milestone = crowdFunding.getMilestone(0, 0);
+    assertTrue(milestone.fundsReleased, "Funds should be released");
+
+    vm.startPrank(contributor3);
+    vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneAlreadyReleased.selector);
+    crowdFunding.voteMilestone(0, 0, false);
+    vm.stopPrank();
+}
+
+
 
 
 
