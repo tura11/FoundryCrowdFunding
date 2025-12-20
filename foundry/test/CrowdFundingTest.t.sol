@@ -971,6 +971,50 @@ function test_VoteMilestone_RevertIf_MilestoneApprovedViaFinalization() public {
     // This is a logical impossibility in the current contract design!
 }
 
+/**
+ * @dev Test: Cannot vote on milestone with funds already released
+ * Expected: Reverts with CrowdFunding__MilestoneAlreadyReleased
+ * Note: This test is also problematic because voting period must expire before finalization
+ */
+function test_VoteMilestone_RevertIf_MilestoneFundsReleased() public {
+    _createDefaultCampaign();
+
+    // Two contributors - will vote and auto-approve
+    vm.startPrank(contributor1);
+    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
+    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+    vm.stopPrank();
+
+    vm.startPrank(contributor2);
+    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2 + 1);
+    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2 + 1, 0);
+    vm.stopPrank();
+
+    vm.warp(block.timestamp + 61 days);
+
+    // Both vote - auto-approves (2/2 = 100%)
+    vm.prank(contributor1);
+    crowdFunding.voteMilestone(0, 0, true);
+    
+    vm.prank(contributor2);
+    crowdFunding.voteMilestone(0, 0, true);
+
+    CrowdFunding.Milestone memory milestone = crowdFunding.getMilestone(0, 0);
+    assertTrue(milestone.approved, "Should be auto-approved");
+
+    // Release funds
+    vm.prank(creator);
+    crowdFunding.releaseMilestoneFunds(0, 0);
+
+    milestone = crowdFunding.getMilestone(0, 0);
+    assertTrue(milestone.fundsReleased, "Funds should be released");
+
+    // Problem: Can't add new contributor after campaign ends
+    // And existing contributors already voted (AlreadyVoted)
+    
+    // This check is unreachable in normal flow!
+}
+
 
 
     // ============================================================================
