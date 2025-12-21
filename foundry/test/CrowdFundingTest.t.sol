@@ -972,6 +972,65 @@ function test_VoteMilestone_RevertIf_MilestoneFundsReleased() public {
 }
 
 
+function testVoteMilestonesCorectlyCOuntingVotes() public {
+    _createDefaultCampaign();
+
+    vm.startPrank(contributor1);
+    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2 );
+    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+    vm.stopPrank();
+
+    vm.startPrank(contributor2);
+    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
+    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+    vm.stopPrank();
+
+    vm.warp(block.timestamp + 61 days);
+
+    // Two vote
+    vm.prank(contributor1);
+    crowdFunding.voteMilestone(0, 0, true);
+    
+    vm.prank(contributor2);
+    crowdFunding.voteMilestone(0, 0, false);
+
+    CrowdFunding.Milestone memory milestone = crowdFunding.getMilestone(0, 0);
+    assertEq(milestone.votesFor, 1, "Should be 1 vote for");
+    assertEq(milestone.votesAgainst, 1, "Should be 1 vote against");
+}
+
+
+    // ============================================================================
+    // RELEASEMILESTONEFUNDS TEST
+    // ============================================================================
+
+
+    function testreleaseMilestoneFundsRevertCrowdFunding__MilestoneNotFound() public {
+        _createDefaultCampaign();
+        
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 61 days);
+
+        vm.prank(contributor1);
+        crowdFunding.voteMilestone(0, 0, true);
+
+        uint256 votingDeadline = crowdFunding.milestoneVotingDeadline(0, 0);
+        vm.warp(votingDeadline + 1);
+
+        vm.prank(creator);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneNotFound.selector);
+        crowdFunding.releaseMilestoneFunds(0, 2);
+
+    }
+
+
+
+
+
 
 
 
