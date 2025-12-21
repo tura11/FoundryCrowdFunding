@@ -1027,6 +1027,28 @@ function testVoteMilestonesCorectlyCOuntingVotes() public {
 
     }
 
+    function testReleaseMilestoneFundsRevertCrowdFunding__OnlyCreatorCanReleaseFunds() public {
+        _createDefaultCampaign();
+        
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 61 days);
+
+        vm.prank(contributor1);
+        crowdFunding.voteMilestone(0, 0, true);
+
+        uint256 votingDeadline = crowdFunding.milestoneVotingDeadline(0, 0);
+        vm.warp(votingDeadline + 1);
+
+        vm.prank(contributor1);
+        vm.expectRevert(CrowdFunding.CrowdFunding__OnlyCreatorCanReleaseFunds.selector);
+        crowdFunding.releaseMilestoneFunds(0, 1);
+
+    }
+
 
 
 
