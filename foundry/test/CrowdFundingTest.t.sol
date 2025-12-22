@@ -1051,6 +1051,24 @@ function testVoteMilestonesCorectlyCOuntingVotes() public {
 
 
 
+    function testReleaseMilestoneFundsRevertCrowdFunding__CampaignStillActive() public {
+        _createDefaultCampaign();
+
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.stopPrank();
+        vm.prank(creator);
+
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignStillActive.selector);
+        crowdFunding.releaseMilestoneFunds(0, 0);
+
+
+        
+    }
+
+
+
 
 
 
