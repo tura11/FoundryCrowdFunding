@@ -256,13 +256,16 @@ contract CrowdFunding is ReentrancyGuard {
         uint256 campaignId = campaigns.length;
         campaigns.push(campaign);
 
+        uint256 tiersLength = _tiers.length;
+        uint256 milestonesLength = _milestones.length;
+
         RewardTier[] storage tiers = campaignTiers[campaignId];
-        for (uint256 i = 0; i < _tiers.length; ++i) {
+        for (uint256 i = 0; i < tiersLength; ++i) {
             tiers.push(_tiers[i]);
         }
 
         Milestone[] storage milestones = campaignMilestones[campaignId];
-        for (uint256 i = 0; i < _milestones.length; ++i) {
+        for (uint256 i = 0; i < milestonesLength; ++i) {
             milestones.push(Milestone({
                 description: _milestones[i].description,
                 percentage: _milestones[i].percentage,
