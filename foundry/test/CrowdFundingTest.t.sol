@@ -96,6 +96,43 @@ contract CrowdFundingTest is Test {
         vm.stopPrank();
     }
 
+    function test_CreateCampaing_RevertIf_DurationTooLong() public {
+        vm.startPrank(creator);
+        vm.expectRevert(CrowdFunding.CrowdFunding__DurationTooLong.selector);
+        crowdFunding.createCampaign("Too Long", CAMPAIGN_GOAL, "Desc", 366, _createDefaultTiers(), _createDefaultMilestones());
+        vm.stopPrank();
+    }
+
+    function test_CreateCampaign_RevertIf_TitleTooLong() public {
+        vm.startPrank(creator);
+        vm.expectRevert(CrowdFunding.CrowdFunding__TitleTooLong.selector);
+        crowdFunding.createCampaign(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            CAMPAIGN_GOAL,
+            "Valid description",
+            CAMPAIGN_DURATION_DAYS,
+            _createDefaultTiers(),
+            _createDefaultMilestones()
+        );
+        vm.stopPrank();
+    }
+
+    function test_CreateCampaign_RevertIf_DescriptionTooLong() public {
+        vm.startPrank(creator);
+        vm.expectRevert(CrowdFunding.CrowdFunding__DescriptionTooLong.selector);
+        crowdFunding.createCampaign(
+            "Valid title",
+             CAMPAIGN_GOAL,
+            "Proin gravida nibh vel velit auctor aliquet. Aenean sollicitudin, lorem quis bibendum auctor, nisi elit consequat ipsum, nec sagittis sem nibh id elit. Duis sed odio sit amet nibh vulputate cursus a sit amet mauris.",
+            CAMPAIGN_DURATION_DAYS,
+            _createDefaultTiers(),
+            _createDefaultMilestones()
+        );
+        vm.stopPrank();
+    }
+
+
+
     // ============================================================================
     // CONTRIBUTION TESTS
     // ============================================================================
@@ -257,4 +294,58 @@ contract CrowdFundingTest is Test {
         assertEq(ownerBalanceAfter - ownerBalanceBefore, fees);
         assertEq(crowdFunding.getAccumulatedFees(), 0);
     }
+
+    // ============================================================================
+    // Test MODIFIFER
+    // ============================================================================
+
+    function test_Modifier_RevertIf_CampaignDoesNotExist() public {
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignDoesNotExist.selector);
+        crowdFunding.getCampaign(0); 
+    }
+
+
+    function testModifierInContibute() public {
+        _createDefaultCampaign();
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignDoesNotExist.selector);
+        crowdFunding.contribute(1, 0, 0);
+    }
+
+
+    function testMoidiferInVoteMilestones() public {
+        _createDefaultCampaign();
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignDoesNotExist.selector);
+        crowdFunding.voteMilestone(2, 0, true);
+    }
+
+
+    function testMoidiferInReleaseMilestoneFunds() public {
+        _createDefaultCampaign();
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignDoesNotExist.selector);
+        crowdFunding.releaseMilestoneFunds(2, 0);
+    }
+
+
+    function testModifierInfinalizeMilestoneVoting() public {
+        _createDefaultCampaign();
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignDoesNotExist.selector);
+        crowdFunding.finalizeMilestoneVoting(2, 0);
+    }
+
+
+    function testModifierInRefund() public {
+        _createDefaultCampaign();
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignDoesNotExist.selector);
+        crowdFunding.refund(2);
+    }
+
+    function test_Modifier_SuccessPath_Contribute() public {
+        uint256 id = _createDefaultCampaign(); 
+
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), 100 * 10**6);
+        crowdFunding.contribute(id, 100 * 10**6, 0); 
+        vm.stopPrank();
+    }
+
 }
