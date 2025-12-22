@@ -457,9 +457,6 @@ contract CrowdFunding is ReentrancyGuard {
             revert CrowdFunding__CampaignStillActive();
         }
 
-        if (campaign.raised < campaign.goal) {
-            revert CrowdFunding__NotEnoughMoneyRaised();
-        }
 
         if (!milestone.approved) {
             revert CrowdFunding__MilestoneNotApproved();
@@ -467,6 +464,10 @@ contract CrowdFunding is ReentrancyGuard {
 
         if (milestone.fundsReleased) {
             revert CrowdFunding__MilestoneFundsAlreadyReleased();
+        }
+
+        if (campaign.raised < campaign.goal) {
+            revert CrowdFunding__NotEnoughMoneyRaised();
         }
 
         // Ensure previous milestones are released

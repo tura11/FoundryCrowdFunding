@@ -972,6 +972,9 @@ function test_VoteMilestone_RevertIf_MilestoneFundsReleased() public {
 }
 
 
+
+
+
 function testVoteMilestonesCorectlyCOuntingVotes() public {
     _createDefaultCampaign();
 
@@ -1062,10 +1065,171 @@ function testVoteMilestonesCorectlyCOuntingVotes() public {
 
         vm.expectRevert(CrowdFunding.CrowdFunding__CampaignStillActive.selector);
         crowdFunding.releaseMilestoneFunds(0, 0);
-
-
-        
     }
+
+
+
+  function test_voteMilestone_RevertIf_NotEnoughMoneyRaised() public {
+        _createDefaultCampaign();
+
+ 
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+        vm.stopPrank();
+
+
+        CrowdFunding.Campaign memory campaign = crowdFunding.getCampaign(0);
+        assertLt(campaign.raised, campaign.goal, "Raised should be less than goal");
+
+  
+        vm.warp(block.timestamp + 31 days);
+
+    
+        vm.startPrank(contributor1);
+        vm.expectRevert(CrowdFunding.CrowdFunding__NotEnoughMoneyRaised.selector);
+        crowdFunding.voteMilestone(0, 0, true);
+        vm.stopPrank();
+    }
+
+
+
+    function test_releaseMilestoneFunds_RevertIf_MilestoneNotApproved() public {
+        _createDefaultCampaign();
+
+        // Three contributors
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 3);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 3, 0);
+        vm.stopPrank();
+
+        vm.startPrank(contributor2);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 3);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 3, 0);
+        vm.stopPrank();
+
+        address contributor3 = makeAddr("contributor3");
+        usdc.mint(contributor3, INITIAL_BALANCE);
+        vm.startPrank(contributor3);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 3 + 1);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 3 + 1, 0);
+        vm.stopPrank();
+
+        // Warp past campaign and milestone deadline
+        vm.warp(block.timestamp + 61 days);
+
+        // Only ONE contributor votes (1/3 = 33% < 51%)
+        vm.prank(contributor1);
+        crowdFunding.voteMilestone(0, 0, true);
+
+        // Verify milestone is NOT approved
+        CrowdFunding.Milestone memory milestone = crowdFunding.getMilestone(0, 0);
+        assertFalse(milestone.approved, "Milestone should not be approved");
+
+        // Creator tries to release funds without approval
+        vm.prank(creator);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneNotApproved.selector);
+        crowdFunding.releaseMilestoneFunds(0, 0);
+    }
+
+    function test_releaseMilestoneFunds_RevertIf_MilestoneFundsAlreadyReleased() public {
+        _createDefaultCampaign();
+
+        // Two contributors (for simpler auto-approval)
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+        vm.stopPrank();
+
+        vm.startPrank(contributor2);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 2 , 0);
+        vm.stopPrank();
+
+        // Warp past campaign and milestone deadline
+        vm.warp(block.timestamp + 61 days);
+
+        // Both vote - triggers auto-approval (2/2 = 100%)
+        vm.prank(contributor1);
+        crowdFunding.voteMilestone(0, 0, true);
+
+        vm.prank(contributor2);
+        crowdFunding.voteMilestone(0, 0, true);
+
+        // Verify milestone is approved
+        CrowdFunding.Milestone memory milestoneBeforeRelease = crowdFunding.getMilestone(0, 0);
+        assertTrue(milestoneBeforeRelease.approved, "Milestone should be approved");
+        assertFalse(milestoneBeforeRelease.fundsReleased, "Funds should not be released yet");
+
+        // Release funds (first time - should succeed)
+        vm.prank(creator);
+        crowdFunding.releaseMilestoneFunds(0, 0);
+
+        // Verify funds were released
+        CrowdFunding.Milestone memory milestoneAfterRelease = crowdFunding.getMilestone(0, 0);
+        assertTrue(milestoneAfterRelease.fundsReleased, "Funds should be released");
+
+        // Try to release funds again (should fail)
+        vm.prank(creator);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneFundsAlreadyReleased.selector);
+        crowdFunding.releaseMilestoneFunds(0, 0);
+    }
+
+
+    function test_releaseMilestoneFunds_RevertIf_PreviousMilestoneNotReleased() public {
+        _createDefaultCampaign();
+
+        // Two contributors
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+        vm.stopPrank();
+
+        vm.startPrank(contributor2);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2 + 1);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 2 + 1, 0);
+        vm.stopPrank();
+
+        // Warp past campaign end
+        vm.warp(block.timestamp + 31 days);
+
+        // === Vote and approve FIRST milestone (ID=0) ===
+        vm.warp(block.timestamp + 30 days); // Past first milestone deadline (60 days)
+
+        vm.prank(contributor1);
+        crowdFunding.voteMilestone(0, 0, true);
+
+        vm.prank(contributor2);
+        crowdFunding.voteMilestone(0, 0, true);
+
+        CrowdFunding.Milestone memory milestone0 = crowdFunding.getMilestone(0, 0);
+        assertTrue(milestone0.approved, "First milestone should be approved");
+        assertFalse(milestone0.fundsReleased, "First milestone funds NOT released yet");
+
+        // === Vote and approve SECOND milestone (ID=1) ===
+        CrowdFunding.Milestone memory milestone1Info = crowdFunding.getMilestone(0, 1);
+        vm.warp(milestone1Info.deadline + 1); // Past second milestone deadline (90 days)
+
+        vm.prank(contributor1);
+        crowdFunding.voteMilestone(0, 1, true);
+
+        vm.prank(contributor2);
+        crowdFunding.voteMilestone(0, 1, true);
+
+        CrowdFunding.Milestone memory milestone1 = crowdFunding.getMilestone(0, 1);
+        assertTrue(milestone1.approved, "Second milestone should be approved");
+        assertFalse(milestone1.fundsReleased, "Second milestone funds NOT released yet");
+
+        // === Try to release SECOND milestone BEFORE first ===
+        // This should fail because milestone 0 hasn't been released yet
+        vm.prank(creator);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneNotApproved.selector);
+        crowdFunding.releaseMilestoneFunds(0, 1); // ❌ Can't skip milestone 0!
+    }
+
+    
+
+
 
 
 
