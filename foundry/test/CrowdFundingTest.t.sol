@@ -173,6 +173,53 @@ contract CrowdFundingTest is Test {
         vm.stopPrank();
     }
 
+    function testContributeRevertIfCampaingHasEnded() public {
+        _createDefaultCampaign();
+
+        vm.warp(block.timestamp + 31 days);
+
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), 100 * 10**6);
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignHasEnded.selector);
+        crowdFunding.contribute(0, 100 * 10**6, 0);
+        vm.stopPrank();
+    }
+
+
+    function testContributeRevertIfAmountIsZero() public {
+        _createDefaultCampaign();
+
+
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), 100 * 10**6);
+        vm.expectRevert(CrowdFunding.CrowdFunding__ValueMustBeGreaterThanZero.selector);
+        crowdFunding.contribute(0, 0, 0);
+        vm.stopPrank();
+        
+    }
+
+    function test_Contribute_RevertIf_CampaignTierDoesNotExist() public {
+         _createDefaultCampaign();
+
+
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), 100 * 10**6);
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignTierDoesNotExist.selector);
+        crowdFunding.contribute(0, 100 * 10**6, 2);
+        vm.stopPrank();
+        
+    }
+
+
+    function test_Contribute_RevertIf_ContributionBelowTierMinimum() public {
+        _createDefaultCampaign();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), 100 * 10**6);
+        vm.expectRevert(CrowdFunding.CrowdFunding__ContributionBelowTierMinimum.selector);
+        crowdFunding.contribute(0, 1 * 10**6, 0);
+        vm.stopPrank();
+    }
+
 
 
     // ============================================================================
