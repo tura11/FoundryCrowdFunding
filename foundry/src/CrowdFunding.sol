@@ -384,7 +384,7 @@ contract CrowdFunding is ReentrancyGuard {
         if (campaign.raised < campaign.goal) {
             revert CrowdFunding__NotEnoughMoneyRaised();
         }
-        
+          
         if (block.timestamp < milestone.deadline) {
             revert CrowdFunding__MilestoneDeadlineNotReached();
         }
