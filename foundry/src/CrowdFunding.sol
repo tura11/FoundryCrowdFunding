@@ -7,7 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 /**
  * @title CrowdFunding
- * @author Your Name
+ * @author Tura11
  * @notice Decentralized crowdfunding platform with milestone-based fund releases, reward tiers, and contributor voting
  * @dev Key features:
  *      - Milestones are calculated using the original goal amount
