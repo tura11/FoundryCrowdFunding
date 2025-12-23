@@ -219,6 +219,60 @@ contract CrowdFundingTest is Test {
         crowdFunding.contribute(0, 1 * 10**6, 0);
         vm.stopPrank();
     }
+    function test_Contribute_RevertIf_TierFull() public {
+
+
+    CrowdFunding.RewardTier[] memory tiers = new CrowdFunding.RewardTier[](1);
+    tiers[0] = CrowdFunding.RewardTier({
+        name: "Limited Tier",
+        description: "Only two backers allowed",
+        minContribution: 10 * 10**6,
+        maxBackers: 2,   
+        currentBackers: 0
+    });
+
+
+    // =========================
+    // Create campaign
+    // =========================
+    vm.startPrank(creator);
+    crowdFunding.createCampaign(
+        "Limited Campaign",
+        CAMPAIGN_GOAL,
+        "Campaign with tier limit = 2",
+        CAMPAIGN_DURATION_DAYS,
+        tiers,
+        _createDefaultMilestones()
+    );
+    vm.stopPrank();
+
+    uint256 campaignId = crowdFunding.getCampaignCount() - 1;
+
+    // =========================
+    // Contributor 1 → OK
+    // =========================
+    vm.startPrank(contributor1);
+    usdc.approve(address(crowdFunding), 10 * 10**6);
+    crowdFunding.contribute(campaignId, 10 * 10**6, 0);
+    vm.stopPrank();
+
+    // =========================
+    // Contributor 2 → OK
+    // =========================
+    vm.startPrank(contributor2);
+    usdc.approve(address(crowdFunding), 10 * 10**6);
+    crowdFunding.contribute(campaignId, 10 * 10**6, 0);
+    vm.stopPrank();
+
+    // =========================
+    // Contributor 3 → REVERT
+    // =========================
+    vm.startPrank(contributor3);
+    usdc.approve(address(crowdFunding), 10 * 10**6);
+    vm.expectRevert(CrowdFunding.CrowdFunding__TierFull.selector);
+    crowdFunding.contribute(campaignId, 10 * 10**6, 0);
+    vm.stopPrank();
+    }
 
 
 
