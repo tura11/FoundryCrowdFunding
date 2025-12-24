@@ -231,10 +231,6 @@ contract CrowdFundingTest is Test {
         currentBackers: 0
     });
 
-
-    // =========================
-    // Create campaign
-    // =========================
     vm.startPrank(creator);
     crowdFunding.createCampaign(
         "Limited Campaign",
@@ -248,30 +244,34 @@ contract CrowdFundingTest is Test {
 
     uint256 campaignId = crowdFunding.getCampaignCount() - 1;
 
-    // =========================
-    // Contributor 1 → OK
-    // =========================
     vm.startPrank(contributor1);
     usdc.approve(address(crowdFunding), 10 * 10**6);
     crowdFunding.contribute(campaignId, 10 * 10**6, 0);
     vm.stopPrank();
 
-    // =========================
-    // Contributor 2 → OK
-    // =========================
+
     vm.startPrank(contributor2);
     usdc.approve(address(crowdFunding), 10 * 10**6);
     crowdFunding.contribute(campaignId, 10 * 10**6, 0);
     vm.stopPrank();
 
-    // =========================
-    // Contributor 3 → REVERT
-    // =========================
     vm.startPrank(contributor3);
     usdc.approve(address(crowdFunding), 10 * 10**6);
     vm.expectRevert(CrowdFunding.CrowdFunding__TierFull.selector);
     crowdFunding.contribute(campaignId, 10 * 10**6, 0);
     vm.stopPrank();
+    }
+
+
+    function testContributterRevertIfInsuficientAllowance() public {
+
+        _createDefaultCampaign();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), 100 * 10**6);
+        vm.expectRevert(CrowdFunding.CrowdFunding__InsufficientAllowance.selector);
+        crowdFunding.contribute(0, 150 * 10**6, 0);
+        vm.stopPrank();
+        
     }
 
 
