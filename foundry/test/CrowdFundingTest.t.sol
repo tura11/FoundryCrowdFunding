@@ -356,34 +356,43 @@ contract CrowdFundingTest is Test {
     }
 
 
-   function test_VoteMilestone_RevertIf_MilestoneAlreadyApproved() public {
-    _createDefaultCampaign();
+    function testVoteMilestoneRevertIfCampaignStillActive() public {
+        _createDefaultCampaign();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.expectRevert(CrowdFunding.CrowdFunding__CampaignStillActive.selector);
+        crowdFunding.voteMilestone(0, 0, true);
+        vm.stopPrank();
+    }
 
-    vm.startPrank(contributor1);
-    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
-    vm.stopPrank();
 
-    vm.startPrank(contributor2);
-    usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-    crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
-    vm.stopPrank();
+    function testVoteMilestoneRevertIfNotEnoughMoneyRaised() public {
+        _createDefaultCampaign();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+        vm.warp(block.timestamp + 61 days);
+        vm.expectRevert(CrowdFunding.CrowdFunding__NotEnoughMoneyRaised.selector);
+        crowdFunding.voteMilestone(0, 0, true);
+        vm.stopPrank();
+        
+    }
 
-    vm.warp(block.timestamp + 61 days);
 
-    // contributor1 votes YES
-    vm.prank(contributor1);
-    crowdFunding.voteMilestone(0, 0, true);
+    function testVoteMilestoneRevertIfMilestoneDeadlineNotReached() public {
+        _createDefaultCampaign();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.warp(block.timestamp + 31 days);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneDeadlineNotReached.selector);
+        crowdFunding.voteMilestone(0, 0, true);
+        vm.stopPrank();
+        
+    }
 
-    // contributor2 votes YES -> milestone becomes approved
-    vm.prank(contributor2);
-    crowdFunding.voteMilestone(0, 0, true);
 
-    // any further vote should revert
-    vm.prank(contributor1);
-    vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneAlreadyReleased.selector);
-    crowdFunding.voteMilestone(0, 0, true);
-}
 
 
 
