@@ -393,6 +393,18 @@ contract CrowdFundingTest is Test {
     }
 
 
+    function testVoteMilestoneRevertIfMilestoneVotingPeriodExpired() public {
+         _createDefaultCampaign();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL, 0);
+        vm.warp(block.timestamp + 68 days);
+        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneVotingPeriodExpired.selector);
+        crowdFunding.voteMilestone(0, 0, true);
+        vm.stopPrank();
+    }
+
+
 
 
 
