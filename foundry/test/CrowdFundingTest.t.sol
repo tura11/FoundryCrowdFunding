@@ -405,6 +405,37 @@ contract CrowdFundingTest is Test {
     }
 
 
+    function testVoteMilestoneCorrectlyUpdatedStates() public {
+        _createDefaultCampaign();
+        vm.startPrank(contributor1);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+        vm.stopPrank();
+
+        vm.startPrank(contributor2);
+        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
+        crowdFunding.contribute(0, CAMPAIGN_GOAL / 2, 0);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 61 days);
+
+        vm.startPrank(contributor1);
+        crowdFunding.voteMilestone(0, 0, true);
+        vm.stopPrank();
+
+        vm.startPrank(contributor2);
+        crowdFunding.voteMilestone(0, 0, false);
+        vm.stopPrank();
+
+        
+
+        CrowdFunding.Milestone  memory milestone = crowdFunding.getMilestone(0, 0);
+        assertEq(milestone.votesFor, 1);
+        assertEq(milestone.votesAgainst, 1);
+        assertEq(milestone.votingFinalized, true);
+    }
+
+
 
 
 
