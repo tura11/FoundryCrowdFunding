@@ -89,6 +89,7 @@ contract CrowdFunding is ReentrancyGuard {
         States state;
         bool fundsWithdrawn;             // Legacy flag (kept for compatibility)
         bool anyMilestoneReleased;       // Blocks refunds once any payout occurs
+        bool fullyFunded;      
     }
 
     /// @notice Reward tier for contributors
@@ -261,7 +262,8 @@ contract CrowdFunding is ReentrancyGuard {
             creator: msg.sender,
             state: States.Active,
             fundsWithdrawn: false,
-            anyMilestoneReleased: false
+            anyMilestoneReleased: false,
+            fullyFunded: false
         });
 
         uint256 campaignId = campaigns.length;
@@ -328,6 +330,9 @@ contract CrowdFunding is ReentrancyGuard {
 
         campaign.raised += amount;
         contributions[campaignId][msg.sender] += amount;
+        if(campaign.raised == campaign.originalGoal){
+            campaign.fullyFunded = true;
+        }
 
         if (isNewContributor) {
             contributorTiers[campaignId][msg.sender] = tierIndex;
@@ -357,7 +362,7 @@ contract CrowdFunding is ReentrancyGuard {
 
         if (milestoneId >= campaignMilestones[campaignId].length) revert CrowdFunding__MilestoneNotFound();
 
-        
+
         Campaign storage campaign = campaigns[campaignId];
         Milestone storage milestone = campaignMilestones[campaignId][milestoneId];
 
@@ -365,9 +370,9 @@ contract CrowdFunding is ReentrancyGuard {
         if (contributions[campaignId][msg.sender] == 0) revert CrowdFunding__NotAContributor();
         if (milestoneVotes[campaignId][milestoneId][msg.sender]) revert CrowdFunding__AlreadyVoted();
         if (milestone.votingFinalized) revert CrowdFunding__VotingAlreadyFinalized();
-        if (milestone.approved || milestone.fundsReleased) revert CrowdFunding__MilestoneAlreadyReleased();
+        if (milestone.approved || milestone.fundsReleased) revert CrowdFunding__MilestoneAlreadyReleased() ;
         if (block.timestamp <= campaign.duration) revert CrowdFunding__CampaignStillActive();
-        if (campaign.raised < campaign.originalGoal) revert CrowdFunding__NotEnoughMoneyRaised();
+        if (!campaign.fullyFunded) revert CrowdFunding__NotEnoughMoneyRaised();
         if (block.timestamp < milestone.deadline) revert CrowdFunding__MilestoneDeadlineNotReached();
 
         if (milestoneVotingDeadline[campaignId][milestoneId] == 0) {
@@ -408,13 +413,16 @@ contract CrowdFunding is ReentrancyGuard {
         nonReentrant
         validateCampaignExists(campaignId)
     {
+
+        if (milestoneId >= campaignMilestones[campaignId].length) revert CrowdFunding__MilestoneNotFound();
+
+
         Campaign storage campaign = campaigns[campaignId];
         Milestone storage milestone = campaignMilestones[campaignId][milestoneId];
 
-        if (milestoneId >= campaignMilestones[campaignId].length) revert CrowdFunding__MilestoneNotFound();
+        
         if (campaign.creator != msg.sender) revert CrowdFunding__OnlyCreatorCanReleaseFunds();
         if (block.timestamp <= campaign.duration) revert CrowdFunding__CampaignStillActive();
-        if (campaign.raised < campaign.originalGoal) revert CrowdFunding__NotEnoughMoneyRaised();
         if (!milestone.approved) revert CrowdFunding__MilestoneNotApproved();
         if (milestone.fundsReleased) revert CrowdFunding__MilestoneFundsAlreadyReleased();
 
