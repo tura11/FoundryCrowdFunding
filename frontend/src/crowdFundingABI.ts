@@ -208,25 +208,6 @@ export const crowdFundingABI = [
         },
         {
             "type": "function",
-            "name": "campaignHasContributions",
-            "inputs": [
-                {
-                    "name": "",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                }
-            ],
-            "outputs": [
-                {
-                    "name": "",
-                    "type": "bool",
-                    "internalType": "bool"
-                }
-            ],
-            "stateMutability": "view"
-        },
-        {
-            "type": "function",
             "name": "campaignMilestones",
             "inputs": [
                 {
@@ -273,6 +254,11 @@ export const crowdFundingABI = [
                 },
                 {
                     "name": "fundsReleased",
+                    "type": "bool",
+                    "internalType": "bool"
+                },
+                {
+                    "name": "votingFinalized",
                     "type": "bool",
                     "internalType": "bool"
                 }
@@ -350,6 +336,11 @@ export const crowdFundingABI = [
                     "internalType": "uint256"
                 },
                 {
+                    "name": "originalGoal",
+                    "type": "uint256",
+                    "internalType": "uint256"
+                },
+                {
                     "name": "duration",
                     "type": "uint256",
                     "internalType": "uint256"
@@ -371,6 +362,16 @@ export const crowdFundingABI = [
                 },
                 {
                     "name": "fundsWithdrawn",
+                    "type": "bool",
+                    "internalType": "bool"
+                },
+                {
+                    "name": "anyMilestoneReleased",
+                    "type": "bool",
+                    "internalType": "bool"
+                },
+                {
+                    "name": "fullyFunded",
                     "type": "bool",
                     "internalType": "bool"
                 }
@@ -543,6 +544,11 @@ export const crowdFundingABI = [
                             "name": "fundsReleased",
                             "type": "bool",
                             "internalType": "bool"
+                        },
+                        {
+                            "name": "votingFinalized",
+                            "type": "bool",
+                            "internalType": "bool"
                         }
                     ]
                 }
@@ -613,6 +619,11 @@ export const crowdFundingABI = [
                             "internalType": "uint256"
                         },
                         {
+                            "name": "originalGoal",
+                            "type": "uint256",
+                            "internalType": "uint256"
+                        },
+                        {
                             "name": "duration",
                             "type": "uint256",
                             "internalType": "uint256"
@@ -634,6 +645,16 @@ export const crowdFundingABI = [
                         },
                         {
                             "name": "fundsWithdrawn",
+                            "type": "bool",
+                            "internalType": "bool"
+                        },
+                        {
+                            "name": "anyMilestoneReleased",
+                            "type": "bool",
+                            "internalType": "bool"
+                        },
+                        {
+                            "name": "fullyFunded",
                             "type": "bool",
                             "internalType": "bool"
                         }
@@ -703,6 +724,11 @@ export const crowdFundingABI = [
                         },
                         {
                             "name": "fundsReleased",
+                            "type": "bool",
+                            "internalType": "bool"
+                        },
+                        {
+                            "name": "votingFinalized",
                             "type": "bool",
                             "internalType": "bool"
                         }
@@ -860,6 +886,11 @@ export const crowdFundingABI = [
                             "name": "fundsReleased",
                             "type": "bool",
                             "internalType": "bool"
+                        },
+                        {
+                            "name": "votingFinalized",
+                            "type": "bool",
+                            "internalType": "bool"
                         }
                     ]
                 }
@@ -936,30 +967,6 @@ export const crowdFundingABI = [
                     "name": "",
                     "type": "bool",
                     "internalType": "bool"
-                }
-            ],
-            "stateMutability": "view"
-        },
-        {
-            "type": "function",
-            "name": "milestoneVotingDeadline",
-            "inputs": [
-                {
-                    "name": "",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                },
-                {
-                    "name": "",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                }
-            ],
-            "outputs": [
-                {
-                    "name": "",
-                    "type": "uint256",
-                    "internalType": "uint256"
                 }
             ],
             "stateMutability": "view"
@@ -1065,19 +1072,6 @@ export const crowdFundingABI = [
         },
         {
             "type": "function",
-            "name": "withdraw",
-            "inputs": [
-                {
-                    "name": "campaignId",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                }
-            ],
-            "outputs": [],
-            "stateMutability": "nonpayable"
-        },
-        {
-            "type": "function",
             "name": "withdrawFees",
             "inputs": [],
             "outputs": [],
@@ -1104,6 +1098,12 @@ export const crowdFundingABI = [
                     "type": "uint256",
                     "indexed": false,
                     "internalType": "uint256"
+                },
+                {
+                    "name": "tierIndex",
+                    "type": "uint8",
+                    "indexed": false,
+                    "internalType": "uint8"
                 }
             ],
             "anonymous": false
@@ -1163,37 +1163,6 @@ export const crowdFundingABI = [
                 },
                 {
                     "name": "amount",
-                    "type": "uint256",
-                    "indexed": false,
-                    "internalType": "uint256"
-                }
-            ],
-            "anonymous": false
-        },
-        {
-            "type": "event",
-            "name": "CampaignWithdrawn",
-            "inputs": [
-                {
-                    "name": "campaignId",
-                    "type": "uint256",
-                    "indexed": true,
-                    "internalType": "uint256"
-                },
-                {
-                    "name": "creator",
-                    "type": "address",
-                    "indexed": true,
-                    "internalType": "address"
-                },
-                {
-                    "name": "amount",
-                    "type": "uint256",
-                    "indexed": false,
-                    "internalType": "uint256"
-                },
-                {
-                    "name": "fee",
                     "type": "uint256",
                     "indexed": false,
                     "internalType": "uint256"
@@ -1333,13 +1302,39 @@ export const crowdFundingABI = [
             "anonymous": false
         },
         {
-            "type": "error",
-            "name": "CrowdFunding__AlreadyVoted",
-            "inputs": []
+            "type": "event",
+            "name": "TierUpgraded",
+            "inputs": [
+                {
+                    "name": "campaignId",
+                    "type": "uint256",
+                    "indexed": true,
+                    "internalType": "uint256"
+                },
+                {
+                    "name": "contributor",
+                    "type": "address",
+                    "indexed": true,
+                    "internalType": "address"
+                },
+                {
+                    "name": "oldTier",
+                    "type": "uint8",
+                    "indexed": false,
+                    "internalType": "uint8"
+                },
+                {
+                    "name": "newTier",
+                    "type": "uint8",
+                    "indexed": false,
+                    "internalType": "uint8"
+                }
+            ],
+            "anonymous": false
         },
         {
             "type": "error",
-            "name": "CrowdFunding__AlreadyWithdrawn",
+            "name": "CrowdFunding__AlreadyVoted",
             "inputs": []
         },
         {
@@ -1350,11 +1345,6 @@ export const crowdFundingABI = [
         {
             "type": "error",
             "name": "CrowdFunding__CampaignHasEnded",
-            "inputs": []
-        },
-        {
-            "type": "error",
-            "name": "CrowdFunding__CampaignHasMilestones",
             "inputs": []
         },
         {
@@ -1374,7 +1364,17 @@ export const crowdFundingABI = [
         },
         {
             "type": "error",
+            "name": "CrowdFunding__CannotRefundAfterPayout",
+            "inputs": []
+        },
+        {
+            "type": "error",
             "name": "CrowdFunding__ContributionBelowTierMinimum",
+            "inputs": []
+        },
+        {
+            "type": "error",
+            "name": "CrowdFunding__ContributionExceedsGoal",
             "inputs": []
         },
         {
@@ -1434,11 +1434,6 @@ export const crowdFundingABI = [
         },
         {
             "type": "error",
-            "name": "CrowdFunding__MilestoneDoesNotExist",
-            "inputs": []
-        },
-        {
-            "type": "error",
             "name": "CrowdFunding__MilestoneFundsAlreadyReleased",
             "inputs": []
         },
@@ -1484,6 +1479,11 @@ export const crowdFundingABI = [
         },
         {
             "type": "error",
+            "name": "CrowdFunding__NotEnoughTotalConitributors",
+            "inputs": []
+        },
+        {
+            "type": "error",
             "name": "CrowdFunding__NotEnoughVotesToApprove",
             "inputs": []
         },
@@ -1500,6 +1500,11 @@ export const crowdFundingABI = [
         {
             "type": "error",
             "name": "CrowdFunding__OnlyOwnerOfCampaignCanWithdraw",
+            "inputs": []
+        },
+        {
+            "type": "error",
+            "name": "CrowdFunding__PreviousMilestoneNotReleased",
             "inputs": []
         },
         {
@@ -1534,6 +1539,16 @@ export const crowdFundingABI = [
         },
         {
             "type": "error",
+            "name": "CrowdFunding__VotingAlreadyFinalized",
+            "inputs": []
+        },
+        {
+            "type": "error",
+            "name": "CrowdFunding__VotingPeriodNotExpired",
+            "inputs": []
+        },
+        {
+            "type": "error",
             "name": "CrowdFunding__YouCantContributeYourOwnCampaign",
             "inputs": []
         },
@@ -1552,5 +1567,5 @@ export const crowdFundingABI = [
                     "internalType": "address"
                 }
             ]
-        }   
+        }
     ]
