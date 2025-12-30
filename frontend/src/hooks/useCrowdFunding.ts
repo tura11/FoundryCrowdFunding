@@ -50,7 +50,8 @@ export function useCrowdFunding() {
       votesFor: 0,
       votesAgainst: 0,
       approved: false,
-      fundsReleased: false
+      fundsReleased: false,
+      votingFinalized: false
     }));
 
     return writeContract({
@@ -153,22 +154,23 @@ export function useCrowdFunding() {
     });
   };
 
-  // ========== WITHDRAW & REFUND ==========
-  const withdraw = async (campaignId: number) => {
-    return writeContract({
-      address: CONTRACT_ADDRESS,
-      abi: crowdFundingABI,
-      functionName: 'withdraw',
-      args: [BigInt(campaignId)],
-    });
-  };
-
+  // ========== REFUND ==========
   const refund = async (campaignId: number) => {
     return writeContract({
       address: CONTRACT_ADDRESS,
       abi: crowdFundingABI,
       functionName: 'refund',
       args: [BigInt(campaignId)],
+    });
+  };
+
+  // ========== WITHDRAW FEES (Owner only) ==========
+  const withdrawFees = async () => {
+    return writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: crowdFundingABI,
+      functionName: 'withdrawFees',
+      args: [],
     });
   };
 
@@ -200,7 +202,6 @@ export function useCrowdFunding() {
     });
   };
 
-  // ✨ NEW - Get user's contribution for a campaign
   const useContribution = (campaignId: number, userAddress?: `0x${string}`) => {
     return useReadContract({
       abi: crowdFundingABI,
@@ -213,13 +214,20 @@ export function useCrowdFunding() {
     });
   };
 
-  // ✨ NEW - Get total contributors for a campaign
   const useTotalContributors = (campaignId: number) => {
     return useReadContract({
       abi: crowdFundingABI,
       address: CONTRACT_ADDRESS,
       functionName: 'getTotalContributors',
       args: [BigInt(campaignId)],
+    });
+  };
+
+  const useAccumulatedFees = () => {
+    return useReadContract({
+      abi: crowdFundingABI,
+      address: CONTRACT_ADDRESS,
+      functionName: 'getAccumulatedFees',
     });
   };
 
@@ -237,7 +245,7 @@ export function useCrowdFunding() {
     voteMilestones,
     finalizeMilestoneVoting,
     releaseMilestoneFunds,
-    withdraw,
+    withdrawFees,
     approveUSDC,
     refund,
     refetchCount,
@@ -248,5 +256,6 @@ export function useCrowdFunding() {
     useCampaignMilestones,
     useContribution,
     useTotalContributors,
+    useAccumulatedFees,
   };
 }

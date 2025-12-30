@@ -7,8 +7,7 @@ import Link from 'next/link';
 import { formatUnits } from 'viem';
 import { useState, useEffect } from 'react';
 import { 
-  ArrowLeft, Target, Clock, Users, TrendingUp, 
-  Coins, Award, CheckCircle, AlertCircle, Loader, Heart, Wallet
+  ArrowLeft, Loader, AlertCircle, Wallet, CheckCircle
 } from 'lucide-react';
 import {
   toastTxSent,
@@ -19,8 +18,6 @@ import {
   toastInvalidAmount,
   toastApprovalSuccess,
   toastContributionSuccess,
-  toastWithdrawSuccess,
-  toastMintSuccess,
   toastVoteSuccess,
   toastFundsReleased,
   toastRefundSuccess,
@@ -35,9 +32,10 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     useCampaign, 
     useCampaignTiers, 
     useCampaignMilestones,
+    useContribution,
+    useTotalContributors,
     approveUSDC,
     contribute: contributeToCampaign,
-    withdraw: withdrawFunds, 
     voteMilestones: voteMilestone,
     finalizeMilestoneVoting, 
     releaseMilestoneFunds,
@@ -48,9 +46,11 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     error
   } = useCrowdFunding();
   
-  const { data: campaign, isLoading: campaignLoading } = useCampaign(campaignId);
+  const { data: campaign, isLoading: campaignLoading, refetch: refetchCampaign } = useCampaign(campaignId);
   const { data: tiers, isLoading: tiersLoading } = useCampaignTiers(campaignId);
-  const { data: milestones, isLoading: milestonesLoading } = useCampaignMilestones(campaignId);
+  const { data: milestones, isLoading: milestonesLoading, refetch: refetchMilestones } = useCampaignMilestones(campaignId);
+  const { data: userContribution } = useContribution(campaignId, address);
+  const { data: totalContributors } = useTotalContributors(campaignId);
 
   const [contributionAmount, setContributionAmount] = useState('');
   const [selectedTier, setSelectedTier] = useState(0);
@@ -80,7 +80,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     }
   });
 
-  const contributions = address ? { [campaignId]: { [address]: BigInt(1) } } : {};
+  const hasContributed = userContribution && Number(userContribution) > 0;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -111,7 +111,8 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
         setCurrentToastId(null);
         
         setTimeout(() => {
-          window.location.reload();
+          refetchCampaign();
+          refetchMilestones();
         }, 2000);
       }
     } else if (error && currentToastId) {
@@ -181,35 +182,12 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       });
 
       toastTxSuccess(mintToastId, 'USDC minted!');
-      toastMintSuccess('10,000');
       
     } catch (err: any) {
       console.error('Mint error:', err);
       toastTxError(mintToastId, err);
     } finally {
       setMintingUSDC(false);
-    }
-  };
-
-  const handleWithdraw = async () => {
-    if (!isConnected || !isCreator) {
-      toastNotCreator();
-      return;
-    }
-
-    const withdrawToastId = toastTxSent();
-
-    try {
-      await withdrawFunds(campaignId);
-      toastTxSuccess(withdrawToastId, 'Withdrawal successful!');
-      toastWithdrawSuccess(raisedFormatted);
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (err: any) {
-      console.error('Withdraw error:', err);
-      toastTxError(withdrawToastId, err);
     }
   };
 
@@ -227,7 +205,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       toastVoteSuccess(vote);
       
       setTimeout(() => {
-        window.location.reload();
+        refetchMilestones();
       }, 2000);
     } catch (err: any) {
       console.error('Vote error:', err);
@@ -248,7 +226,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       toastTxSuccess(finalizeToastId, 'Voting finalized!');
       
       setTimeout(() => {
-        window.location.reload();
+        refetchMilestones();
       }, 2000);
     } catch (err: any) {
       console.error('Finalize error:', err);
@@ -268,15 +246,16 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       await releaseMilestoneFunds(campaignId, milestoneId);
       toastTxSuccess(releaseToastId, 'Funds released!');
       
-      // Calculate milestone amount for toast
       if (milestones && Array.isArray(milestones)) {
         const milestone = milestones[milestoneId] as any;
-        const amount = (Number(raisedFormatted) * milestone.percentage / 100).toFixed(0);
+        const campaignData = campaign as any;
+        const amount = (Number(formatUnits(campaignData.originalGoal, 6)) * milestone.percentage / 100).toFixed(0);
         toastFundsReleased(amount);
       }
       
       setTimeout(() => {
-        window.location.reload();
+        refetchCampaign();
+        refetchMilestones();
       }, 2000);
     } catch (err: any) {
       console.error('Release error:', err);
@@ -295,10 +274,12 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     try {
       await refund(campaignId);
       toastTxSuccess(refundToastId, 'Refund processed!');
-      toastRefundSuccess(contributionAmount || '0');
+      
+      const refundAmount = userContribution ? formatUnits(userContribution as bigint, 6) : '0';
+      toastRefundSuccess(refundAmount);
       
       setTimeout(() => {
-        window.location.reload();
+        refetchCampaign();
       }, 2000);
     } catch (err: any) {
       console.error('Refund error:', err);
@@ -333,10 +314,10 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     );
   }
 
-  const { title, goal, raised, duration, description, creator, state } = campaign as any;
+  const { title, goal, raised, originalGoal, duration, description, creator, state, fullyFunded, anyMilestoneReleased } = campaign as any;
   
-  const progress = Number(raised) > 0 ? (Number(raised) / Number(goal)) * 100 : 0;
-  const goalFormatted = formatUnits(goal, 6);
+  const progress = Number(raised) > 0 ? (Number(raised) / Number(originalGoal)) * 100 : 0;
+  const goalFormatted = formatUnits(originalGoal, 6);
   const raisedFormatted = formatUnits(raised, 6);
   
   const durationDate = new Date(Number(duration) * 1000);
@@ -344,7 +325,8 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
   const daysLeft = Math.max(0, Math.ceil((durationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
   const isActive = now < durationDate;
   const isCreator = address?.toLowerCase() === creator.toLowerCase();
-  const hasFailed = !isActive && progress < 100;
+  const hasFailed = !isActive && !fullyFunded;
+  const canRefund = hasFailed && !anyMilestoneReleased && hasContributed;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -380,8 +362,10 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
       <div className="max-w-7xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           
+          {/* LEFT COLUMN */}
           <div className="lg:col-span-2 space-y-8">
             
+            {/* Hero Image */}
             <div className="relative h-96 rounded-lg overflow-hidden bg-gradient-to-br from-green-400 to-emerald-600">
               {savedImage ? (
                 <img 
@@ -398,16 +382,22 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               )}
               {state === 1 && (
                 <div className="absolute top-6 right-6 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-bold">
-                  ✓ Funded
+                  ✓ Successful
                 </div>
               )}
-              {hasFailed && (
+              {state === 2 && (
                 <div className="absolute top-6 right-6 bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold">
                   ❌ Failed
                 </div>
               )}
+              {fullyFunded && state === 0 && (
+                <div className="absolute top-6 right-6 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-bold">
+                  🎉 Fully Funded
+                </div>
+              )}
             </div>
 
+            {/* Title & Description */}
             <div>
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
                 {title}
@@ -418,7 +408,6 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               </p>
 
               <div className="flex items-center gap-3 text-gray-600">
-                <Users className="w-5 h-5" />
                 <span>
                   By{' '}
                   <span className="font-mono font-medium">{creator.slice(0, 6)}...{creator.slice(-4)}</span>
@@ -433,6 +422,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
             <div className="border-t border-gray-200"></div>
 
+            {/* Rewards */}
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Rewards</h2>
               
@@ -476,21 +466,33 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
             <div className="border-t border-gray-200"></div>
 
+            {/* Milestones */}
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Milestones & Voting</h2>
+              
+              {!fullyFunded && !isActive && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                  <p className="text-yellow-800 text-sm font-medium">
+                    ⚠️ Campaign didn't reach its goal. Milestones are locked.
+                  </p>
+                </div>
+              )}
               
               <div className="space-y-6">
                 {milestones && Array.isArray(milestones) && milestones.length > 0 ? (
                   (milestones as any[]).map((milestone: any, idx: number) => {
-                    const { description: desc, percentage, deadline, votesFor, votesAgainst, approved, fundsReleased } = milestone;
+                    const { description: desc, percentage, deadline, votesFor, votesAgainst, approved, fundsReleased, votingFinalized } = milestone;
                     const deadlineDate = new Date(Number(deadline) * 1000);
                     const now = new Date();
                     const VOTING_PERIOD = 7 * 24 * 60 * 60 * 1000;
                     const votingEndDate = new Date(deadlineDate.getTime() + VOTING_PERIOD);
                     
-                    const isVotingOpen = !isActive && now >= deadlineDate && now < votingEndDate && !approved && !fundsReleased;
-                    const isVotingEnded = now >= votingEndDate && !approved;
+                    const isVotingOpen = !isActive && fullyFunded && now >= deadlineDate && now < votingEndDate && !votingFinalized;
+                    const isVotingEnded = now >= votingEndDate && !votingFinalized;
                     const canRelease = isCreator && approved && !fundsReleased;
+                    
+                    // Check if previous milestone is released
+                    const isPreviousMilestoneReleased = idx === 0 || (milestones[idx - 1] as any).fundsReleased;
                     
                     const totalVotes = Number(votesFor) + Number(votesAgainst);
                     const approvalRate = totalVotes > 0 ? (Number(votesFor) / totalVotes) * 100 : 0;
@@ -515,7 +517,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                           <div>
                             <h3 className="font-bold text-lg text-gray-900">Milestone {idx + 1}</h3>
                             <p className="text-sm text-green-600 font-medium mt-1">
-                              {percentage}% of funds (${(Number(raisedFormatted) * percentage / 100).toFixed(0)})
+                              {percentage}% of original goal (${(Number(goalFormatted) * percentage / 100).toFixed(0)})
                             </p>
                           </div>
                           
@@ -532,6 +534,10 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                           ) : isVotingOpen ? (
                             <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full animate-pulse">
                               🗳️ Voting Open
+                            </span>
+                          ) : votingFinalized ? (
+                            <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+                              ❌ Rejected
                             </span>
                           ) : (
                             <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-full">
@@ -555,7 +561,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                             </div>
                           )}
                           
-                          {!isActive && now < deadlineDate && (
+                          {!isActive && fullyFunded && now < deadlineDate && (
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-gray-600">Voting opens in:</span>
                               <span className="font-medium text-gray-700">{daysUntilVoting} days</span>
@@ -566,9 +572,9 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                         {totalVotes > 0 && (
                           <div className="mb-4">
                             <div className="flex justify-between text-sm mb-2">
-                              <span className="text-gray-600">Votes</span>
+                              <span className="text-gray-600">Votes ({totalContributors ? Number(totalContributors) : 0} contributors)</span>
                               <span className="font-medium text-gray-900">
-                                {totalVotes} total • {approvalRate.toFixed(0)}% approval
+                                {totalVotes} voted • {approvalRate.toFixed(0)}% approval
                               </span>
                             </div>
                             
@@ -598,7 +604,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                           </div>
                         )}
 
-                        {isVotingOpen && !isCreator && contributions?.[campaignId]?.[address || ''] && (
+                        {isVotingOpen && !isCreator && hasContributed && (
                           <div className="flex gap-3">
                             <button
                               onClick={() => handleVoteMilestone(idx, true)}
@@ -617,7 +623,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                           </div>
                         )}
 
-                        {isVotingEnded && !approved && (
+                        {isVotingEnded && (
                           <button
                             onClick={() => handleFinalizeMilestone(idx)}
                             disabled={isPending || isConfirming}
@@ -627,7 +633,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                           </button>
                         )}
 
-                        {canRelease && (
+                        {canRelease && isPreviousMilestoneReleased && (
                           <button
                             onClick={() => handleReleaseFunds(idx)}
                             disabled={isPending || isConfirming}
@@ -637,7 +643,13 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                           </button>
                         )}
 
-                        {!isActive && now < deadlineDate && (
+                        {canRelease && !isPreviousMilestoneReleased && (
+                          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-800">
+                            ⏳ Previous milestone must be released first
+                          </div>
+                        )}
+
+                        {!isActive && fullyFunded && now < deadlineDate && (
                           <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
                             ⏳ Voting will open on {deadlineDate.toLocaleDateString()}
                           </div>
@@ -651,6 +663,8 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               </div>
             </div>
           </div>
+
+          {/* RIGHT COLUMN - Contribution Box */}
           <div className="lg:col-span-1">
             <div className="bg-white border border-gray-200 rounded-lg p-6 sticky top-24">
               
@@ -678,29 +692,17 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                     <div className="text-2xl font-bold text-gray-900">{daysLeft}</div>
                     <div className="text-sm text-gray-600">{isActive ? 'days to go' : 'ended'}</div>
                   </div>
+                  <div>
+                    <div className="text-2xl font-bold text-gray-900">{totalContributors ? Number(totalContributors) : 0}</div>
+                    <div className="text-sm text-gray-600">backers</div>
+                  </div>
                 </div>
 
-                {progress > 100 && (
+                {fullyFunded && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                    <h3 className="font-bold text-gray-900 mb-2">🎉 Funding Breakdown</h3>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Goal:</span>
-                        <span className="font-medium text-gray-900">${Number(goalFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Raised:</span>
-                        <span className="font-medium text-green-600">${Number(raisedFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      <div className="flex justify-between border-t border-blue-200 pt-1 mt-1">
-                        <span className="text-gray-600">Extra funds:</span>
-                        <span className="font-bold text-blue-600">
-                          +${(Number(raisedFormatted) - Number(goalFormatted)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-600 mt-3 italic">
-                      💡 Extra funds will be used for stretch goals and enhanced features
+                    <h3 className="font-bold text-gray-900 mb-2">🎉 Fully Funded!</h3>
+                    <p className="text-xs text-gray-600 italic">
+                      Milestone voting will begin after deadlines
                     </p>
                   </div>
                 )}
@@ -708,7 +710,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
               <div className="border-t border-gray-200 mb-6"></div>
 
-              {!isActive && hasFailed && (
+                {!!canRefund && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                   <p className="text-red-800 text-sm font-medium mb-3">
                     😔 Campaign did not reach its goal
@@ -721,7 +723,10 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                     {isPending || isConfirming ? '⏳ Processing...' : '💸 Get Refund'}
                   </button>
                   <p className="text-xs text-gray-600 text-center mt-2">
-                    Get your contribution back
+                    You contributed $
+                    {userContribution
+                      ? formatUnits(userContribution as bigint, 6)
+                      : '0'}
                   </p>
                 </div>
               )}
@@ -729,20 +734,8 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
               {isCreator && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                   <p className="text-blue-800 text-sm font-medium mb-3">
-                    ℹ️ You can't back your own project
+                    ℹ️ You're the creator - release funds via milestones
                   </p>
-                  <button
-                    onClick={handleWithdraw}
-                    disabled={isPending || isConfirming || isActive}
-                    className="w-full bg-purple-500 text-white py-3 rounded-lg font-bold hover:bg-purple-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                  >
-                    {isPending || isConfirming ? '⏳ Processing...' : '💰 Withdraw Funds'}
-                  </button>
-                  {isActive && (
-                    <p className="text-xs text-gray-500 text-center mt-2">
-                      Campaign must end first
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -756,7 +749,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                     {mintingUSDC ? '⏳ Minting...' : '🎁 Get 10,000 Test USDC'}
                   </button>
                   <p className="text-xs text-gray-500 text-center mt-2">
-                    For testing purposes only (Anvil network)
+                    For testing purposes only
                   </p>
                 </div>
               )}
@@ -768,7 +761,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                       <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="text-sm font-medium text-green-800">USDC Approved!</p>
-                        <p className="text-sm text-green-700">Click the button below to complete your contribution</p>
+                        <p className="text-sm text-green-700">Click below to contribute</p>
                       </div>
                     </div>
                   )}
@@ -793,7 +786,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                       </div>
                       {tiers && Array.isArray(tiers) && tiers[selectedTier] && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Minimum for this tier: ${formatUnits((tiers[selectedTier] as any).minContribution, 6)}
+                          Minimum: ${formatUnits((tiers[selectedTier] as any).minContribution, 6)}
                         </p>
                       )}
                     </div>
@@ -831,11 +824,10 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                     {!isPending && !isConfirming && step === 'approved' && '✓ Click to contribute'}
                     {!isPending && !isConfirming && step === 'idle' && !isConnected && '🔒 Connect wallet'}
                     {!isPending && !isConfirming && step === 'idle' && isConnected && 'Back this project'}
-                    {!isPending && !isConfirming && step === 'needsApproval' && 'Approve USDC'}
                   </button>
 
                   <p className="text-center text-xs text-gray-500 mt-4">
-                    By continuing, you agree to our Terms of Service
+                    By continuing, you agree to our Terms
                   </p>
                 </>
               )}
