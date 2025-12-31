@@ -31,6 +31,8 @@ contract DeployLocal is Script {
         console.log("USDC Balance (deployer):", usdc.balanceOf(deployer) / 10**6, "USDC");
         console.log("===========================================");
     }
+    //forge coverage exclude
+    function test() public {}
 }
 
 //Mock USDC Address:      0x5FbDB2315678afecb367f032d93F642f64180aa3
