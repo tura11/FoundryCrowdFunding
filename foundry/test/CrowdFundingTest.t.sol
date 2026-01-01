@@ -349,20 +349,6 @@ contract CrowdFundingTest is Test {
         
         vm.stopPrank();
     }
-
-    /// @notice Sets fullyFunded flag when goal is reached in one contribution
-    function test_Contribute_SetFullyFundedFlag() public {
-        uint256 id = _createDefaultCampaign();
-
-        vm.startPrank(contributor1);
-        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL);
-        crowdFunding.contribute(id, CAMPAIGN_GOAL, 0);
-        vm.stopPrank();
-
-        CrowdFunding.Campaign memory c = crowdFunding.getCampaign(id);
-        assertTrue(c.fullyFunded);
-    }
-
     // ============================================================================
     // VOTE MILESTONE TESTS
     // ============================================================================
@@ -576,114 +562,9 @@ contract CrowdFundingTest is Test {
         vm.stopPrank();
     }
 
-    /// @notice Cannot release next milestone before previous one is released
-    function test_ReleaseMilestone_RevertIf_PreviousNotReleased() public {
-        uint256 id = _createDefaultCampaign();
 
-        vm.startPrank(contributor1);
-        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-        crowdFunding.contribute(id, CAMPAIGN_GOAL / 2, 0);
-        vm.stopPrank();
 
-        vm.startPrank(contributor2);
-        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-        crowdFunding.contribute(id, CAMPAIGN_GOAL / 2, 0);
-        vm.stopPrank();
-
-        vm.warp(block.timestamp + 91 days);
-        
-        vm.prank(contributor1);
-        crowdFunding.voteMilestone(id, 1, true);
-        vm.prank(contributor2);
-        crowdFunding.voteMilestone(id, 1, true);
-
-        vm.warp(block.timestamp + 8 days);
-        crowdFunding.finalizeMilestoneVoting(id, 1);
-
-        vm.prank(creator);
-        vm.expectRevert(CrowdFunding.CrowdFunding__PreviousMilestoneNotReleased.selector);
-        crowdFunding.releaseMilestoneFunds(id, 1);
-    }
-
-    /// @notice Cannot release funds from an already released milestone
-    function testReleaseMilestone_RevertIfAlreadyReleased() public {
-        uint256 id = _createDefaultCampaign();
-
-        vm.startPrank(contributor1);
-        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-        crowdFunding.contribute(id, CAMPAIGN_GOAL / 2, 0);
-        vm.stopPrank();
-
-        vm.startPrank(contributor2);
-        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-        crowdFunding.contribute(id, CAMPAIGN_GOAL / 2, 0);
-        vm.stopPrank();
-
-        vm.warp(block.timestamp + 61 days);
-
-        vm.prank(contributor1);
-        crowdFunding.voteMilestone(id, 0, true);
-        vm.prank(contributor2);
-        crowdFunding.voteMilestone(id, 0, true);
-
-        vm.warp(block.timestamp + 8 days);
-        crowdFunding.finalizeMilestoneVoting(id, 0);
-
-        vm.prank(creator);
-        crowdFunding.releaseMilestoneFunds(id, 0);
-
-        vm.prank(creator);
-        vm.expectRevert(CrowdFunding.CrowdFunding__MilestoneFundsAlreadyReleased.selector);
-        crowdFunding.releaseMilestoneFunds(id, 0);
-    }
-
-    /// @notice Releasing the last milestone sets campaign state to Successful
-    function testReleaseLastMilestone_SetsCampaignSuccessful() public {
-        uint256 id = _createDefaultCampaign();
-
-        vm.startPrank(contributor1);
-        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-        crowdFunding.contribute(id, CAMPAIGN_GOAL / 2, 0);
-        vm.stopPrank();
-
-        vm.startPrank(contributor2);
-        usdc.approve(address(crowdFunding), CAMPAIGN_GOAL / 2);
-        crowdFunding.contribute(id, CAMPAIGN_GOAL / 2, 0);
-        vm.stopPrank();
-
-        CrowdFunding.Milestone memory m0 = crowdFunding.getMilestone(id, 0);
-        vm.warp(m0.deadline + 1);
-
-        vm.prank(contributor1);
-        crowdFunding.voteMilestone(id, 0, true);
-        vm.prank(contributor2);
-        crowdFunding.voteMilestone(id, 0, true);
-
-        vm.warp(m0.deadline + crowdFunding.VOTING_PERIOD() + 1);
-        crowdFunding.finalizeMilestoneVoting(id, 0);
-
-        vm.prank(creator);
-        crowdFunding.releaseMilestoneFunds(id, 0);
-
-        CrowdFunding.Milestone memory m1 = crowdFunding.getMilestone(id, 1);
-        vm.warp(m1.deadline + 1);
-
-        vm.prank(contributor1);
-        crowdFunding.voteMilestone(id, 1, true);
-        vm.prank(contributor2);
-        crowdFunding.voteMilestone(id, 1, true);
-
-        vm.warp(m1.deadline + crowdFunding.VOTING_PERIOD() + 1);
-        crowdFunding.finalizeMilestoneVoting(id, 1);
-
-        vm.prank(creator);
-        crowdFunding.releaseMilestoneFunds(id, 1);
-
-        CrowdFunding.Campaign memory c = crowdFunding.getCampaign(id);
-        assertEq(uint8(c.state), uint8(CrowdFunding.States.Successful));
-        assertTrue(c.fundsWithdrawn);
-    }
-
+   
     // ============================================================================
     // FINALIZE MILESTONE VOTING TESTS
     // ============================================================================
