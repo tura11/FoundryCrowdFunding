@@ -61,7 +61,6 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__PreviousMilestoneNotReleased();
     error CrowdFunding__VotingPeriodNotExpired();
     error CrowdFunding__VotingAlreadyFinalized();
-    error CrowdFunding__CannotRefundAfterPayout();
     error CrowdFunding__ContributionExceedsGoal();
     error CrowdFunding__NotEnoughTotalConitributors();
 
