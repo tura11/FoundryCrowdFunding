@@ -8,10 +8,13 @@ const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`;
 
 export function useCrowdFunding() {
   const { address } = useAccount();
-  const { writeContract, data: hash, isPending, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
-  
-  const { data: campaignCount, refetch: refetchCount } = useReadContract({
+
+  // ========== WRITE CONTRACT HOOKS ==========
+  const { writeContract, data: txHash, isPending, error } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
+
+  // ========== READ CAMPAIGN COUNT ==========
+  const { data: campaignCount, refetch: refetchCampaignCount } = useReadContract({
     abi: crowdFundingABI,
     address: CONTRACT_ADDRESS,
     functionName: 'getCampaignCount',
@@ -23,17 +26,8 @@ export function useCrowdFunding() {
     goal: string,
     description: string,
     durationInDays: number,
-    tiers: {
-      name: string;
-      description: string;
-      minContribution: string;
-      maxBackers: number;
-    }[],
-    milestones: {
-      description: string;
-      percentage: number;
-      deadline: number;
-    }[]
+    tiers: { name: string; description: string; minContribution: string; maxBackers: number }[],
+    milestones: { description: string; percentage: number; deadline: number }[]
   ) => {
     const formattedTiers = tiers.map(t => ({
       name: t.name,
@@ -51,7 +45,7 @@ export function useCrowdFunding() {
       votesAgainst: 0,
       approved: false,
       fundsReleased: false,
-      votingFinalized: false
+      votingFinalized: false,
     }));
 
     return writeContract({
@@ -64,7 +58,7 @@ export function useCrowdFunding() {
         description,
         BigInt(durationInDays),
         formattedTiers,
-        formattedMilestones
+        formattedMilestones,
       ],
     });
   };
@@ -79,78 +73,50 @@ export function useCrowdFunding() {
           type: 'function',
           inputs: [
             { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' }
+            { name: 'amount', type: 'uint256' },
           ],
-          outputs: [{ type: 'bool' }]
-        }
+          outputs: [{ type: 'bool' }],
+        },
       ],
       functionName: 'approve',
       args: [CONTRACT_ADDRESS, parseUnits(amount, 6)],
     });
   };
 
-  const contribute = async (
-    campaignId: number,
-    amount: string,
-    tierIndex: number
-  ) => {
+  const contribute = async (campaignId: number, amount: string, tierIndex: number) => {
     return writeContract({
       address: CONTRACT_ADDRESS,
       abi: crowdFundingABI,
       functionName: 'contribute',
-      args: [
-        BigInt(campaignId),
-        parseUnits(amount, 6),
-        tierIndex
-      ],
+      args: [BigInt(campaignId), parseUnits(amount, 6), tierIndex],
     });
   };
 
-  // ========== MILESTONE FUNCTIONS ==========
-  const voteMilestones = async (
-    campaignId: number,
-    milestoneIndex: number,
-    vote: boolean
-  ) => {
+  // ========== MILESTONES ==========
+  const voteMilestone = async (campaignId: number, milestoneId: number, vote: boolean) => {
     return writeContract({
       address: CONTRACT_ADDRESS,
       abi: crowdFundingABI,
       functionName: 'voteMilestone',
-      args: [
-        BigInt(campaignId),
-        BigInt(milestoneIndex),
-        vote
-      ],
+      args: [BigInt(campaignId), BigInt(milestoneId), vote],
     });
   };
 
-  const finalizeMilestoneVoting = async (
-    campaignId: number,
-    milestoneIndex: number
-  ) => {
+  const finalizeMilestoneVoting = async (campaignId: number, milestoneId: number) => {
     return writeContract({
       address: CONTRACT_ADDRESS,
       abi: crowdFundingABI,
       functionName: 'finalizeMilestoneVoting',
-      args: [
-        BigInt(campaignId),
-        BigInt(milestoneIndex)
-      ],
+      args: [BigInt(campaignId), BigInt(milestoneId)],
     });
   };
 
-  const releaseMilestoneFunds = async (
-    campaignId: number,
-    milestoneIndex: number
-  ) => {
+  const releaseMilestoneFunds = async (campaignId: number, milestoneId: number) => {
     return writeContract({
       address: CONTRACT_ADDRESS,
       abi: crowdFundingABI,
       functionName: 'releaseMilestoneFunds',
-      args: [
-        BigInt(campaignId),
-        BigInt(milestoneIndex)
-      ],
+      args: [BigInt(campaignId), BigInt(milestoneId)],
     });
   };
 
@@ -164,7 +130,7 @@ export function useCrowdFunding() {
     });
   };
 
-  // ========== WITHDRAW FEES (Owner only) ==========
+  // ========== WITHDRAW FEES ==========
   const withdrawFees = async () => {
     return writeContract({
       address: CONTRACT_ADDRESS,
@@ -175,61 +141,53 @@ export function useCrowdFunding() {
   };
 
   // ========== READ FUNCTIONS ==========
-  const useCampaign = (id: number) => {
-    return useReadContract({
+  const useCampaign = (id: number) =>
+    useReadContract({
       abi: crowdFundingABI,
       address: CONTRACT_ADDRESS,
       functionName: 'getCampaign',
       args: [BigInt(id)],
     });
-  };
 
-  const useCampaignTiers = (campaignId: number) => {
-    return useReadContract({
+  const useCampaignTiers = (campaignId: number) =>
+    useReadContract({
       abi: crowdFundingABI,
       address: CONTRACT_ADDRESS,
       functionName: 'getCampaignTiers',
       args: [BigInt(campaignId)],
     });
-  };
 
-  const useCampaignMilestones = (campaignId: number) => {
-    return useReadContract({
+  const useCampaignMilestones = (campaignId: number) =>
+    useReadContract({
       abi: crowdFundingABI,
       address: CONTRACT_ADDRESS,
       functionName: 'getCampaignMilestones',
       args: [BigInt(campaignId)],
     });
-  };
 
-  const useContribution = (campaignId: number, userAddress?: `0x${string}`) => {
-    return useReadContract({
+  const useContribution = (campaignId: number, userAddress?: `0x${string}`) =>
+    useReadContract({
       abi: crowdFundingABI,
       address: CONTRACT_ADDRESS,
       functionName: 'getContribution',
       args: [BigInt(campaignId), userAddress || address || '0x0000000000000000000000000000000000000000'],
-      query: {
-        enabled: !!userAddress || !!address,
-      }
+      query: { enabled: !!userAddress || !!address },
     });
-  };
 
-  const useTotalContributors = (campaignId: number) => {
-    return useReadContract({
+  const useTotalContributors = (campaignId: number) =>
+    useReadContract({
       abi: crowdFundingABI,
       address: CONTRACT_ADDRESS,
       functionName: 'getTotalContributors',
       args: [BigInt(campaignId)],
     });
-  };
 
-  const useAccumulatedFees = () => {
-    return useReadContract({
+  const useAccumulatedFees = () =>
+    useReadContract({
       abi: crowdFundingABI,
       address: CONTRACT_ADDRESS,
       functionName: 'getAccumulatedFees',
     });
-  };
 
   return {
     // State
@@ -238,18 +196,17 @@ export function useCrowdFunding() {
     isConfirming,
     isConfirmed,
     error,
-    
+
     // Write functions
     createCampaign,
     contribute,
-    voteMilestones,
+    approveUSDC,
+    voteMilestone,
     finalizeMilestoneVoting,
     releaseMilestoneFunds,
-    withdrawFees,
-    approveUSDC,
     refund,
-    refetchCount,
-    
+    withdrawFees,
+
     // Read functions
     useCampaign,
     useCampaignTiers,
@@ -257,5 +214,7 @@ export function useCrowdFunding() {
     useContribution,
     useTotalContributors,
     useAccumulatedFees,
+
+    refetchCampaignCount,
   };
 }
