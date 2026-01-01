@@ -6,16 +6,24 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title CrowdFunding - Fixed Refund Logic
- * @notice FIXES:
- * 1. Changed fullyFunded check to >= instead of ==
- * 2. Fixed refund condition to check fullyFunded flag instead of raised amount
- * 3. Added better error messages
+ * @title CrowdFunding
+ * @author Tura11
+ * @notice Secure decentralized crowdfunding platform with milestone-based fund releases.
+ *         Contributors can back campaigns with USDC and receive reward tiers.
+ *         Funds are released to the creator only after community approval of each milestone.
+ * @dev  Key security features:
+ *      - Milestone payouts calculated from original goal (prevents overfunding exploits)
+ *      - Refunds permanently blocked after any milestone payout
+ *      - Flexible voting: 51% of all contributors OR 51% of votes cast (with turnout ≥51%)
+ *      - Tier upgrades validated
+ *      - Sequential milestone releases enforced
+ *      - Reentrancy protection and safe ERC20 transfers
  */
 contract CrowdFunding is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ========== ERRORS ==========
+
     error CrowdFunding__YouCantContributeYourOwnCampaign();
     error CrowdFunding__CampaignDoesNotExist();
     error CrowdFunding__CampaignHasEnded();
@@ -61,38 +69,43 @@ contract CrowdFunding is ReentrancyGuard {
     error CrowdFunding__NotEnoughTotalConitributors();
 
     // ========== ENUMS & STRUCTS ==========
+
+    /// @notice Campaign states
     enum States {
-        Active,
-        Successful,
-        Failed
+        Active,    // Campaign is ongoing
+        Successful, // All milestones released
+        Failed     // Campaign ended without reaching goal and no payouts made
     }
 
+    /// @notice Core campaign data
     struct Campaign {
         string title;
-        uint256 goal;
-        uint256 raised;
-        uint256 originalGoal;
-        uint256 duration;
+        uint256 goal;                    // Current target (unused after creation)
+        uint256 raised;                  // Total USDC currently held in contract
+        uint256 originalGoal;            // Immutable goal used for all calculations
+        uint256 duration;                // Unix timestamp when campaign ends
         string description;
         address creator;
         States state;
-        bool fundsWithdrawn;
-        bool anyMilestoneReleased;
-        bool fullyFunded;
+        bool fundsWithdrawn;             // Legacy flag (kept for compatibility)
+        bool anyMilestoneReleased;       // Blocks refunds once any payout occurs
+        bool fullyFunded;      
     }
 
+    /// @notice Reward tier for contributors
     struct RewardTier {
         string name;
         string description;
-        uint256 minContribution;
-        uint256 maxBackers;
+        uint256 minContribution;         // Minimum USDC required (6 decimals)
+        uint256 maxBackers;              // 0 = unlimited
         uint256 currentBackers;
     }
 
+    /// @notice Milestone with community voting
     struct Milestone {
         string description;
-        uint8 percentage;
-        uint256 deadline;
+        uint8 percentage;                // Percentage of originalGoal (10-100)
+        uint256 deadline;                // Unix timestamp after which voting opens
         uint16 votesFor;
         uint16 votesAgainst;
         bool approved;
@@ -101,17 +114,68 @@ contract CrowdFunding is ReentrancyGuard {
     }
 
     // ========== EVENTS ==========
-    event CampaignCreated(uint256 indexed campaignId, address indexed creator, string title, uint256 goal, uint256 duration);
-    event CampaignContributed(uint256 indexed campaignId, address indexed contributor, uint256 amount, uint8 tierIndex);
-    event CampaignRefunded(uint256 indexed campaignId, address indexed contributor, uint256 amount);
+
+    /// @notice Emitted when a new campaign is created
+    event CampaignCreated(
+        uint256 indexed campaignId,
+        address indexed creator,
+        string title,
+        uint256 goal,
+        uint256 duration
+    );
+
+    /// @notice Emitted when a contributor backs a campaign
+    event CampaignContributed(
+        uint256 indexed campaignId,
+        address indexed contributor,
+        uint256 amount,
+        uint8 tierIndex
+    );
+
+    /// @notice Emitted when a contributor receives a refund
+    event CampaignRefunded(
+        uint256 indexed campaignId,
+        address indexed contributor,
+        uint256 amount
+    );
+
+    /// @notice Emitted when platform fees are withdrawn by owner
     event FeesWithdrawn(address indexed owner, uint256 amount);
-    event MilestoneVoted(uint256 indexed campaignId, uint256 indexed milestoneId, address indexed voter, bool vote, uint16 votesFor, uint16 votesAgainst);
+
+    /// @notice Emitted when a contributor votes on a milestone
+    event MilestoneVoted(
+        uint256 indexed campaignId,
+        uint256 indexed milestoneId,
+        address indexed voter,
+        bool vote,
+        uint16 votesFor,
+        uint16 votesAgainst
+    );
+
+    /// @notice Emitted when a milestone is approved by community
     event MilestoneApproved(uint256 indexed campaignId, uint256 indexed milestoneId);
+
+    /// @notice Emitted when a milestone is rejected by community
     event MilestoneRejected(uint256 indexed campaignId, uint256 indexed milestoneId);
-    event MilestoneFundsReleased(uint256 indexed campaignId, uint256 indexed milestoneId, uint256 amount, uint256 fee);
-    event TierUpgraded(uint256 indexed campaignId, address indexed contributor, uint8 oldTier, uint8 newTier);
+
+    /// @notice Emitted when milestone funds are released to creator
+    event MilestoneFundsReleased(
+        uint256 indexed campaignId,
+        uint256 indexed milestoneId,
+        uint256 amount,
+        uint256 fee
+    );
+
+    /// @notice Emitted when a contributor upgrades to a higher tier
+    event TierUpgraded(
+        uint256 indexed campaignId,
+        address indexed contributor,
+        uint8 oldTier,
+        uint8 newTier
+    );
 
     // ========== STATE VARIABLES ==========
+
     Campaign[] public campaigns;
     IERC20 public immutable usdc;
     address public immutable owner;
@@ -125,6 +189,7 @@ contract CrowdFunding is ReentrancyGuard {
     mapping(uint256 => mapping(address => uint256)) public contributions;
 
     // ========== CONSTANTS ==========
+
     uint256 public constant MAX_STRING_LENGTH = 200;
     uint256 public constant MIN_TIER_CONTRIBUTION = 10 * 10**6;
     uint8 public constant MIN_TIERS = 1;
@@ -133,17 +198,23 @@ contract CrowdFunding is ReentrancyGuard {
     uint8 public constant MAX_MILESTONES = 5;
     uint8 public constant MIN_MILESTONE_PERCENTAGE = 10;
     uint256 public constant MAX_MILESTONE_DAYS = 365;
-    uint256 public constant FEE = 3;
+    uint256 public constant FEE = 3; // 3%
     uint256 public constant MIN_CAMPAIGN_GOAL = 100 * 10**6;
     uint256 public constant MAX_CAMPAIGN_DURATION = 365;
     uint256 public constant DIVIDER = 100;
     uint256 public constant VOTING_PERIOD = 7 days;
     uint8 public constant APPROVAL_THRESHOLD = 51;
 
+    // ========== CONSTRUCTOR ==========
+
+    /// @notice Deploys the contract and sets the USDC token address
+    /// @param _usdcAddress Address of USDC token (6 decimals)
     constructor(address _usdcAddress) {
         owner = msg.sender;
         usdc = IERC20(_usdcAddress);
     }
+
+    // ========== MODIFIERS ==========
 
     modifier validateCampaignExists(uint256 campaignId) {
         if (campaignId >= campaigns.length) revert CrowdFunding__CampaignDoesNotExist();
@@ -152,6 +223,15 @@ contract CrowdFunding is ReentrancyGuard {
 
     // ========== MAIN FUNCTIONS ==========
 
+    /**
+     * @notice Creates a new crowdfunding campaign
+     * @param _title Campaign title (max 200 chars)
+     * @param _goal Funding goal in USDC (6 decimals, min 100 USDC)
+     * @param _description Campaign description (max 200 chars)
+     * @param _durationInDays Campaign duration in days (1-365)
+     * @param _tiers Array of reward tiers (1-5 tiers)
+     * @param _milestones Array of milestones (2-5 milestones)
+     */
     function createCampaign(
         string memory _title,
         uint256 _goal,
@@ -213,6 +293,13 @@ contract CrowdFunding is ReentrancyGuard {
         emit CampaignCreated(campaignId, msg.sender, _title, _goal, duration);
     }
 
+    /**
+     * @notice Contribute USDC to a campaign and claim a reward tier
+     * @param campaignId ID of the campaign
+     * @param amount Amount of USDC to contribute (6 decimals)
+     * @param tierIndex Index of the desired reward tier
+     * @dev Caller must approve this contract for at least `amount` USDC before calling
+     */
     function contribute(uint256 campaignId, uint256 amount, uint8 tierIndex)
         external
         nonReentrant
@@ -242,8 +329,6 @@ contract CrowdFunding is ReentrancyGuard {
 
         campaign.raised += amount;
         contributions[campaignId][msg.sender] += amount;
-        
-        // FIX 1: Changed == to >= to catch cases where contribution exceeds goal
         if(campaign.raised >= campaign.originalGoal){
             campaign.fullyFunded = true;
         }
@@ -262,9 +347,16 @@ contract CrowdFunding is ReentrancyGuard {
         emit CampaignContributed(campaignId, msg.sender, amount, tierIndex);
     }
 
+    /**
+     * @notice Vote on a milestone approval after its deadline
+     * @param campaignId Campaign ID
+     * @param milestoneId Milestone index
+     * @param vote true = approve, false = reject
+     * @dev Only contributors can vote, once per milestone
+     */
     function voteMilestone(uint256 campaignId, uint256 milestoneId, bool vote)
-        external
-        validateCampaignExists(campaignId)
+    external
+    validateCampaignExists(campaignId)
     {
         if (milestoneId >= campaignMilestones[campaignId].length)
             revert CrowdFunding__MilestoneNotFound();
@@ -304,16 +396,25 @@ contract CrowdFunding is ReentrancyGuard {
         );
     }
 
+    /**
+     * @notice Release approved milestone funds to campaign creator
+     * @param campaignId Campaign ID
+     * @param milestoneId Milestone index
+     * @dev Only campaign creator can call. Previous milestones must be released first.
+     */
     function releaseMilestoneFunds(uint256 campaignId, uint256 milestoneId)
         external
         nonReentrant
         validateCampaignExists(campaignId)
     {
+
         if (milestoneId >= campaignMilestones[campaignId].length) revert CrowdFunding__MilestoneNotFound();
+
 
         Campaign storage campaign = campaigns[campaignId];
         Milestone storage milestone = campaignMilestones[campaignId][milestoneId];
 
+        
         if (campaign.creator != msg.sender) revert CrowdFunding__OnlyCreatorCanReleaseFunds();
         if (block.timestamp <= campaign.duration) revert CrowdFunding__CampaignStillActive();
         if (!milestone.approved) revert CrowdFunding__MilestoneNotApproved();
@@ -351,9 +452,17 @@ contract CrowdFunding is ReentrancyGuard {
         emit MilestoneFundsReleased(campaignId, milestoneId, amountToCreator, feeAmount);
     }
 
+    /**
+     * @notice Finalize milestone voting after the 7-day voting period ends
+     * @param campaignId Campaign ID
+     * @param milestoneId Milestone index
+     * @dev Approval requires either:
+     *      - ≥51% yes votes AND ≥51% turnout, or
+     *      - ≥51% of ALL contributors voted yes
+     */
     function finalizeMilestoneVoting(uint256 campaignId, uint256 milestoneId)
-        external
-        validateCampaignExists(campaignId)
+    external
+    validateCampaignExists(campaignId)
     {
         if (milestoneId >= campaignMilestones[campaignId].length)
             revert CrowdFunding__MilestoneNotFound();
@@ -375,12 +484,20 @@ contract CrowdFunding is ReentrancyGuard {
         if (totalVotes == 0)
             revert CrowdFunding__NotEnoughVotesToApprove();
 
-        uint256 approvalPercentageOfVotes = (milestone.votesFor * 100) / totalVotes;
-        uint256 approvalPercentageOfAllContributors = (milestone.votesFor * 100) / totalContributorsCount;
-        uint256 voteTurnoutPercentage = (totalVotes * 100) / totalContributorsCount;
+        uint256 approvalPercentageOfVotes =
+            (milestone.votesFor * 100) / totalVotes;
 
-        bool approved = (approvalPercentageOfVotes >= APPROVAL_THRESHOLD && voteTurnoutPercentage >= APPROVAL_THRESHOLD)
-            || (approvalPercentageOfAllContributors >= APPROVAL_THRESHOLD);
+        uint256 approvalPercentageOfAllContributors =
+            (milestone.votesFor * 100) / totalContributorsCount;
+
+        uint256 voteTurnoutPercentage =
+            (totalVotes * 100) / totalContributorsCount;
+
+        bool approved =
+            (approvalPercentageOfVotes >= APPROVAL_THRESHOLD &&
+            voteTurnoutPercentage >= APPROVAL_THRESHOLD)
+            ||
+            (approvalPercentageOfAllContributors >= APPROVAL_THRESHOLD);
 
         milestone.votingFinalized = true;
 
@@ -392,6 +509,10 @@ contract CrowdFunding is ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Withdraw accumulated platform fees (3% of released milestones)
+     * @dev Only contract owner can call
+     */
     function withdrawFees() external nonReentrant {
         if (msg.sender != owner) revert CrowdFunding__OnlyOwnerOfCampaignCanWithdraw();
         if (accumulatedFees == 0) revert CrowdFunding__NoFeesToWithdraw();
@@ -405,7 +526,7 @@ contract CrowdFunding is ReentrancyGuard {
 
     /**
      * @notice Refund contribution if campaign failed and no milestone was released
-     * @dev FIX 2: Changed condition to check fullyFunded flag instead of comparing raised amount
+     * @param campaignId Campaign ID
      */
     function refund(uint256 campaignId)
         external
@@ -415,11 +536,7 @@ contract CrowdFunding is ReentrancyGuard {
         Campaign storage campaign = campaigns[campaignId];
 
         if (block.timestamp <= campaign.duration) revert CrowdFunding__CampaignStillActive();
-        
-        // FIX 2: Use fullyFunded flag instead of comparing raised >= originalGoal
-        // This ensures refund works correctly even if raised amount equals or exceeds goal
         if (campaign.fullyFunded) revert CrowdFunding__CampaignRaisedEnoughMoney();
-        
         if (campaign.anyMilestoneReleased) revert CrowdFunding__CannotRefundAfterPayout();
 
         uint256 amount = contributions[campaignId][msg.sender];
@@ -465,7 +582,7 @@ contract CrowdFunding is ReentrancyGuard {
         if (totalPercentage != 100) revert CrowdFunding__MilestonePercentageMustSumTo100();
     }
 
-    // ========== VIEW FUNCTIONS ==========
+// ========== VIEW FUNCTIONS ==========
 
     function getCampaign(uint256 campaignId) external view validateCampaignExists(campaignId) returns (Campaign memory) {
         return campaigns[campaignId];
@@ -512,3 +629,5 @@ contract CrowdFunding is ReentrancyGuard {
         return totalContributors[campaignId];
     }
 }
+
+
