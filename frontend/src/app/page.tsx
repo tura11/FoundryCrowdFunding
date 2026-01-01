@@ -2,7 +2,7 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useCrowdFunding } from '@/hooks/useCrowdFunding';
-import { useAccount } from 'wagmi';
+import { useAccount, usePublicClient } from 'wagmi';
 import Link from 'next/link';
 import { formatUnits } from 'viem';
 import { Rocket, Plus, Heart } from 'lucide-react';
@@ -12,6 +12,25 @@ export default function Home() {
   const { isConnected } = useAccount();
   const { campaignCount } = useCrowdFunding();
   const [mounted, setMounted] = useState(false);
+  const publicClient = usePublicClient();
+  const [chainTimestamp, setChainTimestamp] = useState<number>(0);
+
+  useEffect(() => {
+  if (!publicClient) return;
+
+  const fetchTimestamp = async () => {
+    try {
+      const block = await publicClient.getBlock();
+      setChainTimestamp(Number(block.timestamp));
+    } catch (err) {
+      console.error('Failed to fetch block timestamp', err);
+    }
+  };
+
+  fetchTimestamp();
+  const interval = setInterval(fetchTimestamp, 5000);
+  return () => clearInterval(interval);
+}, [publicClient]);
 
   useEffect(() => {
     setMounted(true);
@@ -172,8 +191,28 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
   const { useCampaign } = useCrowdFunding();
   const { data: campaign, isLoading } = useCampaign(campaignId);
   
+  const publicClient = usePublicClient();
+  const [chainTimestamp, setChainTimestamp] = useState<number>(0);
   const [savedImage, setSavedImage] = useState<string | null>(null);
-  
+
+  // Poll chain timestamp
+  useEffect(() => {
+    if (!publicClient) return;
+
+    const fetchTimestamp = async () => {
+      try {
+        const block = await publicClient.getBlock();
+        setChainTimestamp(Number(block.timestamp));
+      } catch (err) {
+        console.error('Failed to fetch block timestamp', err);
+      }
+    };
+
+    fetchTimestamp();
+    const interval = setInterval(fetchTimestamp, 5000);
+    return () => clearInterval(interval);
+  }, [publicClient]);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const img = localStorage.getItem(`campaign-${campaignId}-image`);
@@ -212,10 +251,10 @@ function CampaignCard({ campaignId }: { campaignId: number }) {
   const goalFormatted = formatUnits(goal, 6);
   const raisedFormatted = formatUnits(raised, 6);
   
-  const durationDate = new Date(Number(duration) * 1000);
-  const now = new Date();
-  const daysLeft = Math.max(0, Math.ceil((durationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-  const isActive = now < durationDate;
+  const durationTimestamp = Number(duration);
+  const currentTime = chainTimestamp || Math.floor(Date.now() / 1000);  // fallback na local
+  const daysLeft = Math.max(0, Math.ceil((durationTimestamp - currentTime) / 86400));
+  const isActive = currentTime < durationTimestamp;
 
   return (
     <Link href={`/campaign/${campaignId}`} className="group">

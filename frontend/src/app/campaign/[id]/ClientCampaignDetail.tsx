@@ -2,7 +2,7 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useCrowdFunding } from '@/hooks/useCrowdFunding';
-import { useAccount, useReadContract } from 'wagmi';
+import { useAccount, useReadContract, usePublicClient} from 'wagmi';
 import Link from 'next/link';
 import { formatUnits } from 'viem';
 import { useState, useEffect } from 'react';
@@ -58,6 +58,26 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
   const [savedImage, setSavedImage] = useState<string | null>(null);
   const [mintingUSDC, setMintingUSDC] = useState(false);
   const [currentToastId, setCurrentToastId] = useState<string | null>(null);
+  const publicClient = usePublicClient();
+  const [chainTimestamp, setChainTimestamp] = useState<number>(0);  
+
+
+useEffect(() => {
+  if (!publicClient) return;
+
+  const fetchTimestamp = async () => {
+    try {
+      const block = await publicClient.getBlock();
+      setChainTimestamp(Number(block.timestamp));
+    } catch (err) {
+      console.error('Failed to fetch block timestamp', err);
+    }
+  };
+
+  fetchTimestamp();
+  const interval = setInterval(fetchTimestamp, 5000);
+  return () => clearInterval(interval);
+}, [publicClient]);
 
   const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`;
 
@@ -267,55 +287,21 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
   console.log('🚀 Starting refund process...');
   
   if (!isConnected) {
-    console.error('❌ Wallet not connected');
     toastWalletNotConnected();
     return;
   }
 
-  // Debug: sprawdź warunki
-  console.log('🔍 Campaign state:', {
-    campaignId,
-    isActive,
-    fullyFunded,
-    anyMilestoneReleased,
-    hasContributed,
-    canRefund,
-    userContribution: userContribution?.toString(),
-    campaignData: campaign
-  });
-
-  // Sprawdź każdy warunek osobno
-  if (isActive) {
-    console.error('❌ Campaign still active');
-    toastValidationError('Campaign is still active');
-    return;
-  }
-
-  if (fullyFunded) {
-    console.error('❌ Campaign was fully funded');
-    toastValidationError('Campaign reached its goal - no refunds available');
-    return;
-  }
-
-  if (anyMilestoneReleased) {
-    console.error('❌ Milestone already released');
-    toastValidationError('Funds already released - no refunds available');
-    return;
-  }
-
   if (!hasContributed) {
-    console.error('❌ User has not contributed');
     toastValidationError('You have not contributed to this campaign');
     return;
   }
 
-  console.log('✅ All conditions passed, calling refund...');
+
 
   const refundToastId = toastTxSent();
 
   try {
-    await refund(campaignId);
-    console.log('✅ Refund transaction sent');
+    await refund(campaignId);  
     toastTxSuccess(refundToastId, 'Refund processed!');
     
     const refundAmount = userContribution ? formatUnits(userContribution as bigint, 6) : '0';
@@ -326,15 +312,9 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     }, 2000);
   } catch (err: any) {
     console.error('❌ Refund error:', err);
-    console.error('Error details:', {
-      message: err.message,
-      code: err.code,
-      data: err.data
-    });
     toastTxError(refundToastId, err);
   }
 };
-
   // ========== LOADING & ERROR STATES ==========
 
   if (campaignLoading || tiersLoading || milestonesLoading) {
@@ -368,13 +348,13 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
   const goalFormatted = formatUnits(originalGoal, 6);
   const raisedFormatted = formatUnits(raised, 6);
   
-  const durationDate = new Date(Number(duration) * 1000);
-  const now = new Date();
-  const daysLeft = Math.max(0, Math.ceil((durationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-  const isActive = now < durationDate;
+  const durationTimestamp = Number(duration);  // z kontraktu
+  const currentTime = chainTimestamp || Math.floor(Date.now() / 1000);  // fallback na local jeśli nie załadowany
+  const daysLeft = Math.max(0, Math.ceil((durationTimestamp - currentTime) / 86400));  // 86400s = 1 dzień
+  const isActive = currentTime < durationTimestamp;
   const isCreator = address?.toLowerCase() === creator.toLowerCase();
   const hasFailed = !isActive && !fullyFunded;
-  const canRefund = hasFailed && !anyMilestoneReleased && hasContributed;
+  const canRefund = hasFailed && hasContributed;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -530,26 +510,22 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                 {milestones && Array.isArray(milestones) && milestones.length > 0 ? (
                   (milestones as any[]).map((milestone: any, idx: number) => {
                     const { description: desc, percentage, deadline, votesFor, votesAgainst, approved, fundsReleased, votingFinalized } = milestone;
-                    const deadlineDate = new Date(Number(deadline) * 1000);
-                    const now = new Date();
-                    const VOTING_PERIOD = 7 * 24 * 60 * 60 * 1000;
-                    const votingEndDate = new Date(deadlineDate.getTime() + VOTING_PERIOD);
-                    
-                    const isVotingOpen = !isActive && fullyFunded && now >= deadlineDate && now < votingEndDate && !votingFinalized;
-                    const isVotingEnded = now >= votingEndDate && !votingFinalized;
+
+                    const deadlineTimestamp = Number(deadline);
+                    const votingEndTimestamp = deadlineTimestamp + 7 * 24 * 60 * 60;  // 7 days in seconds
+
+                    const isVotingOpen = !isActive && fullyFunded && currentTime >= deadlineTimestamp && currentTime < votingEndTimestamp && !votingFinalized;
+                    const isVotingEnded = currentTime >= votingEndTimestamp && !votingFinalized;
                     const canRelease = isCreator && approved && !fundsReleased;
-                    
+
                     // Check if previous milestone is released
                     const isPreviousMilestoneReleased = idx === 0 || (milestones[idx - 1] as any).fundsReleased;
-                    
+
                     const totalVotes = Number(votesFor) + Number(votesAgainst);
                     const approvalRate = totalVotes > 0 ? (Number(votesFor) / totalVotes) * 100 : 0;
-                    
-                    const timeUntilVoting = deadlineDate.getTime() - now.getTime();
-                    const timeLeftInVoting = votingEndDate.getTime() - now.getTime();
-                    
-                    const daysUntilVoting = Math.ceil(timeUntilVoting / (1000 * 60 * 60 * 24));
-                    const daysLeftVoting = Math.ceil(timeLeftInVoting / (1000 * 60 * 60 * 24));
+
+                    const daysUntilVoting = Math.max(0, Math.ceil((deadlineTimestamp - currentTime) / 86400));
+                    const daysLeftVoting = Math.max(0, Math.ceil((votingEndTimestamp - currentTime) / 86400));
                     
                     return (
                       <div 
@@ -597,25 +573,25 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                         <p className="text-gray-700 mb-4">{desc}</p>
 
                         <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                          <div className="flex items-center justify-between text-sm mb-2">
-                            <span className="text-gray-600">Deadline:</span>
-                            <span className="font-medium text-gray-900">{deadlineDate.toLocaleDateString()}</span>
-                          </div>
-                          
-                          {isVotingOpen && (
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-blue-600">⏳ Voting ends in:</span>
-                              <span className="font-bold text-blue-700">{daysLeftVoting} days</span>
-                            </div>
-                          )}
-                          
-                          {!isActive && fullyFunded && now < deadlineDate && (
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-600">Voting opens in:</span>
-                              <span className="font-medium text-gray-700">{daysUntilVoting} days</span>
-                            </div>
-                          )}
+                        <div className="flex items-center justify-between text-sm mb-2">
+                          <span className="text-gray-600">Deadline:</span>
+                          <span className="font-medium text-gray-900">{new Date(deadlineTimestamp * 1000).toLocaleDateString()}</span>
                         </div>
+                        
+                        {isVotingOpen && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-blue-600">⏳ Voting ends in:</span>
+                            <span className="font-bold text-blue-700">{daysLeftVoting} days</span>
+                          </div>
+                        )}
+                        
+                        {!isActive && fullyFunded && currentTime < deadlineTimestamp && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">Voting opens in:</span>
+                            <span className="font-medium text-gray-700">{daysUntilVoting} days</span>
+                          </div>
+                        )}
+                      </div>
 
                         {totalVotes > 0 && (
                           <div className="mb-4">
@@ -697,11 +673,17 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
                           </div>
                         )}
 
-                        {!isActive && fullyFunded && now < deadlineDate && (
-                          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
-                            ⏳ Voting will open on {deadlineDate.toLocaleDateString()}
-                          </div>
-                        )}
+                        {!isActive && fullyFunded && currentTime < deadlineTimestamp && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Voting opens in:</span>
+                          <span className="font-medium text-gray-700">{daysUntilVoting} days</span>
+                        </div>
+                      )}
+                                                  {!isActive && fullyFunded && currentTime < deadlineTimestamp && (
+                        <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                          ⏳ Voting will open on {new Date(deadlineTimestamp * 1000).toLocaleDateString()}
+                        </div>
+                      )}
                       </div>
                     );
                   })
