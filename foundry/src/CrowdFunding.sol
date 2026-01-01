@@ -362,7 +362,6 @@ contract CrowdFunding is ReentrancyGuard {
         Campaign storage campaign = campaigns[campaignId];
         Milestone storage milestone = campaignMilestones[campaignId][milestoneId];
 
-        if (campaign.raised < campaign.originalGoal) revert CrowdFunding__NotEnoughMoneyRaised();
         if (campaign.creator != msg.sender) revert CrowdFunding__OnlyCreatorCanReleaseFunds();
         if (!milestone.approved) revert CrowdFunding__MilestoneNotApproved();
         if (milestone.fundsReleased) revert CrowdFunding__MilestoneFundsAlreadyReleased();
@@ -403,7 +402,6 @@ contract CrowdFunding is ReentrancyGuard {
 
         if (block.timestamp <= campaign.duration) revert CrowdFunding__CampaignStillActive();
         if (campaign.raised >= campaign.originalGoal) revert CrowdFunding__CampaignRaisedEnoughMoney();
-        if (campaign.anyMilestoneReleased) revert CrowdFunding__CannotRefundAfterPayout();
 
         uint256 amount = contributions[campaignId][msg.sender];
         if (amount == 0) revert CrowdFunding__NothingToRefund();

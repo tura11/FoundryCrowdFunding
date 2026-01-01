@@ -1414,11 +1414,6 @@ export const crowdFundingABI = [
         },
         {
             "type": "error",
-            "name": "CrowdFunding__MilestoneAlreadyReleased",
-            "inputs": []
-        },
-        {
-            "type": "error",
             "name": "CrowdFunding__MilestoneDeadlineNotReached",
             "inputs": []
         },
