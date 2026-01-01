@@ -36,7 +36,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     useTotalContributors,
     approveUSDC,
     contribute: contributeToCampaign,
-    voteMilestones: voteMilestone,
+    voteMilestone: voteMilestone,
     finalizeMilestoneVoting, 
     releaseMilestoneFunds,
     refund,
@@ -263,29 +263,77 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
     }
   };
 
-  const handleRefund = async () => {
-    if (!isConnected) {
-      toastWalletNotConnected();
-      return;
-    }
+ const handleRefund = async () => {
+  console.log('🚀 Starting refund process...');
+  
+  if (!isConnected) {
+    console.error('❌ Wallet not connected');
+    toastWalletNotConnected();
+    return;
+  }
 
-    const refundToastId = toastTxSent();
+  // Debug: sprawdź warunki
+  console.log('🔍 Campaign state:', {
+    campaignId,
+    isActive,
+    fullyFunded,
+    anyMilestoneReleased,
+    hasContributed,
+    canRefund,
+    userContribution: userContribution?.toString(),
+    campaignData: campaign
+  });
 
-    try {
-      await refund(campaignId);
-      toastTxSuccess(refundToastId, 'Refund processed!');
-      
-      const refundAmount = userContribution ? formatUnits(userContribution as bigint, 6) : '0';
-      toastRefundSuccess(refundAmount);
-      
-      setTimeout(() => {
-        refetchCampaign();
-      }, 2000);
-    } catch (err: any) {
-      console.error('Refund error:', err);
-      toastTxError(refundToastId, err);
-    }
-  };
+  // Sprawdź każdy warunek osobno
+  if (isActive) {
+    console.error('❌ Campaign still active');
+    toastValidationError('Campaign is still active');
+    return;
+  }
+
+  if (fullyFunded) {
+    console.error('❌ Campaign was fully funded');
+    toastValidationError('Campaign reached its goal - no refunds available');
+    return;
+  }
+
+  if (anyMilestoneReleased) {
+    console.error('❌ Milestone already released');
+    toastValidationError('Funds already released - no refunds available');
+    return;
+  }
+
+  if (!hasContributed) {
+    console.error('❌ User has not contributed');
+    toastValidationError('You have not contributed to this campaign');
+    return;
+  }
+
+  console.log('✅ All conditions passed, calling refund...');
+
+  const refundToastId = toastTxSent();
+
+  try {
+    await refund(campaignId);
+    console.log('✅ Refund transaction sent');
+    toastTxSuccess(refundToastId, 'Refund processed!');
+    
+    const refundAmount = userContribution ? formatUnits(userContribution as bigint, 6) : '0';
+    toastRefundSuccess(refundAmount);
+    
+    setTimeout(() => {
+      refetchCampaign();
+    }, 2000);
+  } catch (err: any) {
+    console.error('❌ Refund error:', err);
+    console.error('Error details:', {
+      message: err.message,
+      code: err.code,
+      data: err.data
+    });
+    toastTxError(refundToastId, err);
+  }
+};
 
   // ========== LOADING & ERROR STATES ==========
 
