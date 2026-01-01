@@ -1,6 +1,6 @@
 export const crowdFundingABI = [
 
-        {
+         {
             "type": "constructor",
             "inputs": [
                 {
@@ -1340,11 +1340,6 @@ export const crowdFundingABI = [
         {
             "type": "error",
             "name": "CrowdFunding__CampaignTierDoesNotExist",
-            "inputs": []
-        },
-        {
-            "type": "error",
-            "name": "CrowdFunding__CannotRefundAfterPayout",
             "inputs": []
         },
         {
