@@ -361,17 +361,7 @@ export const crowdFundingABI = [
                     "internalType": "enum CrowdFunding.States"
                 },
                 {
-                    "name": "fundsWithdrawn",
-                    "type": "bool",
-                    "internalType": "bool"
-                },
-                {
                     "name": "anyMilestoneReleased",
-                    "type": "bool",
-                    "internalType": "bool"
-                },
-                {
-                    "name": "fullyFunded",
                     "type": "bool",
                     "internalType": "bool"
                 }
@@ -644,17 +634,7 @@ export const crowdFundingABI = [
                             "internalType": "enum CrowdFunding.States"
                         },
                         {
-                            "name": "fundsWithdrawn",
-                            "type": "bool",
-                            "internalType": "bool"
-                        },
-                        {
                             "name": "anyMilestoneReleased",
-                            "type": "bool",
-                            "internalType": "bool"
-                        },
-                        {
-                            "name": "fullyFunded",
                             "type": "bool",
                             "internalType": "bool"
                         }
