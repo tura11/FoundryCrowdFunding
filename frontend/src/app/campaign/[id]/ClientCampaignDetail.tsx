@@ -54,7 +54,7 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
 
   const [contributionAmount, setContributionAmount] = useState('');
   const [selectedTier, setSelectedTier] = useState(0);
-  const [step, setStep] = useState<'idle' | 'needsApproval' | 'approved' | 'contributing'>('idle');
+  const [step, setStep] = useState<'idle' | 'needsApproval' | 'approved' | 'contributing' | 'refunding'>('idle');
   const [savedImage, setSavedImage] = useState<string | null>(null);
   const [mintingUSDC, setMintingUSDC] = useState(false);
   const [currentToastId, setCurrentToastId] = useState<string | null>(null);
@@ -134,13 +134,34 @@ useEffect(() => {
           refetchCampaign();
           refetchMilestones();
         }, 2000);
+      } else if (step === 'refunding') {
+        // DODANE: specjalna obsługa dla refund
+        toastTxSuccess(currentToastId, 'Refund processed!');
+        const refundAmount = userContribution ? formatUnits(userContribution as bigint, 6) : '0';
+        toastRefundSuccess(refundAmount);
+        setStep('idle');
+        setCurrentToastId(null);
+        
+        setTimeout(() => {
+          refetchCampaign();
+        }, 2000);
+      } else {
+        // Dla innych operacji (vote, release, finalize)
+        toastTxSuccess(currentToastId, 'Transaction successful!');
+        setStep('idle');
+        setCurrentToastId(null);
+        
+        setTimeout(() => {
+          refetchCampaign();
+          refetchMilestones();
+        }, 2000);
       }
     } else if (error && currentToastId) {
       toastTxError(currentToastId, error);
       setStep('idle');
       setCurrentToastId(null);
     }
-  }, [isPending, isConfirming, isConfirmed, error, currentToastId, step, contributionAmount]);
+  }, [isPending, isConfirming, isConfirmed, error, currentToastId, step, contributionAmount, userContribution]);
 
   // ========== HANDLERS ==========
 
@@ -217,11 +238,8 @@ useEffect(() => {
       return;
     }
 
-    const voteToastId = toastTxSent();
-
     try {
       await voteMilestone(campaignId, milestoneId, vote);
-      toastTxSuccess(voteToastId, 'Vote submitted!');
       toastVoteSuccess(vote);
       
       setTimeout(() => {
@@ -229,7 +247,6 @@ useEffect(() => {
       }, 2000);
     } catch (err: any) {
       console.error('Vote error:', err);
-      toastTxError(voteToastId, err);
     }
   };
 
@@ -239,18 +256,14 @@ useEffect(() => {
       return;
     }
 
-    const finalizeToastId = toastTxSent();
-
     try {
       await finalizeMilestoneVoting(campaignId, milestoneId);
-      toastTxSuccess(finalizeToastId, 'Voting finalized!');
       
       setTimeout(() => {
         refetchMilestones();
       }, 2000);
     } catch (err: any) {
       console.error('Finalize error:', err);
-      toastTxError(finalizeToastId, err);
     }
   };
 
@@ -260,11 +273,8 @@ useEffect(() => {
       return;
     }
 
-    const releaseToastId = toastTxSent();
-
     try {
       await releaseMilestoneFunds(campaignId, milestoneId);
-      toastTxSuccess(releaseToastId, 'Funds released!');
       
       if (milestones && Array.isArray(milestones)) {
         const milestone = milestones[milestoneId] as any;
@@ -279,42 +289,32 @@ useEffect(() => {
       }, 2000);
     } catch (err: any) {
       console.error('Release error:', err);
-      toastTxError(releaseToastId, err);
     }
   };
 
- const handleRefund = async () => {
-  console.log('🚀 Starting refund process...');
-  
-  if (!isConnected) {
-    toastWalletNotConnected();
-    return;
-  }
-
-  if (!hasContributed) {
-    toastValidationError('You have not contributed to this campaign');
-    return;
-  }
-
-
-
-  const refundToastId = toastTxSent();
-
-  try {
-    await refund(campaignId);  
-    toastTxSuccess(refundToastId, 'Refund processed!');
+  const handleRefund = async () => {
+    console.log('🚀 Starting refund process...');
     
-    const refundAmount = userContribution ? formatUnits(userContribution as bigint, 6) : '0';
-    toastRefundSuccess(refundAmount);
-    
-    setTimeout(() => {
-      refetchCampaign();
-    }, 2000);
-  } catch (err: any) {
-    console.error('❌ Refund error:', err);
-    toastTxError(refundToastId, err);
-  }
-};
+    if (!isConnected) {
+      toastWalletNotConnected();
+      return;
+    }
+
+    if (!hasContributed) {
+      toastValidationError('You have not contributed to this campaign');
+      return;
+    }
+
+    try {
+      setStep('refunding'); // DODANE: ustawienie stanu refunding
+      await refund(campaignId);
+      // useEffect obsłuży resztę (toasty, refetch)
+    } catch (err: any) {
+      console.error('❌ Refund error:', err);
+      setStep('idle');
+    }
+  };
+
   // ========== LOADING & ERROR STATES ==========
 
   if (campaignLoading || tiersLoading || milestonesLoading) {
@@ -348,9 +348,9 @@ useEffect(() => {
   const goalFormatted = formatUnits(originalGoal, 6);
   const raisedFormatted = formatUnits(raised, 6);
   
-  const durationTimestamp = Number(duration);  // z kontraktu
-  const currentTime = chainTimestamp || Math.floor(Date.now() / 1000);  // fallback na local jeśli nie załadowany
-  const daysLeft = Math.max(0, Math.ceil((durationTimestamp - currentTime) / 86400));  // 86400s = 1 dzień
+  const durationTimestamp = Number(duration);
+  const currentTime = chainTimestamp || Math.floor(Date.now() / 1000);
+  const daysLeft = Math.max(0, Math.ceil((durationTimestamp - currentTime) / 86400));
   const isActive = currentTime < durationTimestamp;
   const isCreator = address?.toLowerCase() === creator.toLowerCase();
   const hasFailed = !isActive && !fullyFunded;
@@ -512,13 +512,12 @@ useEffect(() => {
                     const { description: desc, percentage, deadline, votesFor, votesAgainst, approved, fundsReleased, votingFinalized } = milestone;
 
                     const deadlineTimestamp = Number(deadline);
-                    const votingEndTimestamp = deadlineTimestamp + 7 * 24 * 60 * 60;  // 7 days in seconds
+                    const votingEndTimestamp = deadlineTimestamp + 7 * 24 * 60 * 60;
 
                     const isVotingOpen = !isActive && fullyFunded && currentTime >= deadlineTimestamp && currentTime < votingEndTimestamp && !votingFinalized;
                     const isVotingEnded = currentTime >= votingEndTimestamp && !votingFinalized;
                     const canRelease = isCreator && approved && !fundsReleased;
 
-                    // Check if previous milestone is released
                     const isPreviousMilestoneReleased = idx === 0 || (milestones[idx - 1] as any).fundsReleased;
 
                     const totalVotes = Number(votesFor) + Number(votesAgainst);
@@ -573,25 +572,25 @@ useEffect(() => {
                         <p className="text-gray-700 mb-4">{desc}</p>
 
                         <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                        <div className="flex items-center justify-between text-sm mb-2">
-                          <span className="text-gray-600">Deadline:</span>
-                          <span className="font-medium text-gray-900">{new Date(deadlineTimestamp * 1000).toLocaleDateString()}</span>
+                          <div className="flex items-center justify-between text-sm mb-2">
+                            <span className="text-gray-600">Deadline:</span>
+                            <span className="font-medium text-gray-900">{new Date(deadlineTimestamp * 1000).toLocaleDateString()}</span>
+                          </div>
+                          
+                          {isVotingOpen && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-blue-600">⏳ Voting ends in:</span>
+                              <span className="font-bold text-blue-700">{daysLeftVoting} days</span>
+                            </div>
+                          )}
+                          
+                          {!isActive && fullyFunded && currentTime < deadlineTimestamp && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-600">Voting opens in:</span>
+                              <span className="font-medium text-gray-700">{daysUntilVoting} days</span>
+                            </div>
+                          )}
                         </div>
-                        
-                        {isVotingOpen && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-blue-600">⏳ Voting ends in:</span>
-                            <span className="font-bold text-blue-700">{daysLeftVoting} days</span>
-                          </div>
-                        )}
-                        
-                        {!isActive && fullyFunded && currentTime < deadlineTimestamp && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Voting opens in:</span>
-                            <span className="font-medium text-gray-700">{daysUntilVoting} days</span>
-                          </div>
-                        )}
-                      </div>
 
                         {totalVotes > 0 && (
                           <div className="mb-4">
@@ -674,16 +673,10 @@ useEffect(() => {
                         )}
 
                         {!isActive && fullyFunded && currentTime < deadlineTimestamp && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Voting opens in:</span>
-                          <span className="font-medium text-gray-700">{daysUntilVoting} days</span>
-                        </div>
-                      )}
-                                                  {!isActive && fullyFunded && currentTime < deadlineTimestamp && (
-                        <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
-                          ⏳ Voting will open on {new Date(deadlineTimestamp * 1000).toLocaleDateString()}
-                        </div>
-                      )}
+                          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                            ⏳ Voting will open on {new Date(deadlineTimestamp * 1000).toLocaleDateString()}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -740,7 +733,7 @@ useEffect(() => {
 
               <div className="border-t border-gray-200 mb-6"></div>
 
-                {!!canRefund && (
+              {!!canRefund && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                   <p className="text-red-800 text-sm font-medium mb-3">
                     😔 Campaign did not reach its goal
