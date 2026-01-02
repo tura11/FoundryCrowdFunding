@@ -342,19 +342,37 @@ useEffect(() => {
     );
   }
 
-  const { title, goal, raised, originalGoal, duration, description, creator, state, fullyFunded, anyMilestoneReleased } = campaign as any;
-  
-  const progress = Number(raised) > 0 ? (Number(raised) / Number(originalGoal)) * 100 : 0;
-  const goalFormatted = formatUnits(originalGoal, 6);
+  const { title, raised, originalGoal, duration, description, creator, state, anyMilestoneReleased } = campaign as any;
+  const isCreator =
+  !!address &&
+  creator?.toLowerCase() === address.toLowerCase();
+
+  const fullyFunded = Number(raised) >= Number(originalGoal);
   const raisedFormatted = formatUnits(raised, 6);
-  
+  const goalFormatted = formatUnits(originalGoal, 6);
   const durationTimestamp = Number(duration);
   const currentTime = chainTimestamp || Math.floor(Date.now() / 1000);
-  const daysLeft = Math.max(0, Math.ceil((durationTimestamp - currentTime) / 86400));
+  const progress =
+  Number(originalGoal) > 0
+    ? (Number(raised) / Number(originalGoal)) * 100
+    : 0;
+
   const isActive = currentTime < durationTimestamp;
-  const isCreator = address?.toLowerCase() === creator.toLowerCase();
-  const hasFailed = !isActive && !fullyFunded;
-  const canRefund = hasFailed && hasContributed;
+  const daysLeft = isActive
+  ? Math.max(
+      0,
+      Math.ceil((durationTimestamp - currentTime) / 86400)
+    )
+  : 0;
+
+  const hasFailed =
+    currentTime > durationTimestamp &&
+    Number(raised) < Number(originalGoal);
+
+  const canRefund =
+    hasFailed &&
+    hasContributed &&
+    !anyMilestoneReleased;
 
   return (
     <div className="min-h-screen bg-gray-50">
