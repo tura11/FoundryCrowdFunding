@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { formatUnits } from 'viem';
 import { useState, useEffect } from 'react';
 import { 
-  ArrowLeft, Loader, AlertCircle, Wallet, CheckCircle
+  ArrowLeft, Loader, AlertCircle, Wallet, CheckCircle, Zap, Target, Clock, Users, TrendingUp, Award
 } from 'lucide-react';
 import {
   toastTxSent,
@@ -59,25 +59,24 @@ export default function ClientCampaignDetail({ campaignId }: { campaignId: numbe
   const [mintingUSDC, setMintingUSDC] = useState(false);
   const [currentToastId, setCurrentToastId] = useState<string | null>(null);
   const publicClient = usePublicClient();
-  const [chainTimestamp, setChainTimestamp] = useState<number>(0);  
+  const [chainTimestamp, setChainTimestamp] = useState<number>(0);
 
+  useEffect(() => {
+    if (!publicClient) return;
 
-useEffect(() => {
-  if (!publicClient) return;
+    const fetchTimestamp = async () => {
+      try {
+        const block = await publicClient.getBlock();
+        setChainTimestamp(Number(block.timestamp));
+      } catch (err) {
+        console.error('Failed to fetch block timestamp', err);
+      }
+    };
 
-  const fetchTimestamp = async () => {
-    try {
-      const block = await publicClient.getBlock();
-      setChainTimestamp(Number(block.timestamp));
-    } catch (err) {
-      console.error('Failed to fetch block timestamp', err);
-    }
-  };
-
-  fetchTimestamp();
-  const interval = setInterval(fetchTimestamp, 5000);
-  return () => clearInterval(interval);
-}, [publicClient]);
+    fetchTimestamp();
+    const interval = setInterval(fetchTimestamp, 5000);
+    return () => clearInterval(interval);
+  }, [publicClient]);
 
   const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`;
 
@@ -109,7 +108,6 @@ useEffect(() => {
     }
   }, [campaignId]);
 
-  // ========== TRANSACTION STATE MANAGEMENT ==========
   useEffect(() => {
     if (isPending && !currentToastId) {
       const toastId = toastTxSent();
@@ -135,7 +133,6 @@ useEffect(() => {
           refetchMilestones();
         }, 2000);
       } else if (step === 'refunding') {
-        // DODANE: specjalna obsługa dla refund
         toastTxSuccess(currentToastId, 'Refund processed!');
         const refundAmount = userContribution ? formatUnits(userContribution as bigint, 6) : '0';
         toastRefundSuccess(refundAmount);
@@ -146,7 +143,6 @@ useEffect(() => {
           refetchCampaign();
         }, 2000);
       } else {
-        // Dla innych operacji (vote, release, finalize)
         toastTxSuccess(currentToastId, 'Transaction successful!');
         setStep('idle');
         setCurrentToastId(null);
@@ -162,8 +158,6 @@ useEffect(() => {
       setCurrentToastId(null);
     }
   }, [isPending, isConfirming, isConfirmed, error, currentToastId, step, contributionAmount, userContribution]);
-
-  // ========== HANDLERS ==========
 
   const handleContribute = async () => {
     if (!isConnected) {
@@ -293,8 +287,6 @@ useEffect(() => {
   };
 
   const handleRefund = async () => {
-    console.log('🚀 Starting refund process...');
-    
     if (!isConnected) {
       toastWalletNotConnected();
       return;
@@ -306,21 +298,18 @@ useEffect(() => {
     }
 
     try {
-      setStep('refunding'); // DODANE: ustawienie stanu refunding
+      setStep('refunding');
       await refund(campaignId);
-      // useEffect obsłuży resztę (toasty, refetch)
     } catch (err: any) {
-      console.error('❌ Refund error:', err);
+      console.error('Refund error:', err);
       setStep('idle');
     }
   };
 
-  // ========== LOADING & ERROR STATES ==========
-
   if (campaignLoading || tiersLoading || milestonesLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 border border-gray-200">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50 flex items-center justify-center">
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-8 border border-gray-200 shadow-2xl">
           <Loader className="w-12 h-12 animate-spin text-green-500 mx-auto mb-4" />
           <p className="text-gray-700 font-medium">Loading campaign...</p>
         </div>
@@ -330,8 +319,8 @@ useEffect(() => {
 
   if (!campaign) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 border border-gray-200 text-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50 flex items-center justify-center">
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-8 border border-gray-200 text-center shadow-2xl">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <p className="text-gray-700 font-medium">Campaign not found</p>
           <Link href="/" className="text-green-600 hover:underline mt-4 inline-block">
@@ -343,53 +332,37 @@ useEffect(() => {
   }
 
   const { title, raised, originalGoal, duration, description, creator, state, anyMilestoneReleased } = campaign as any;
-  const isCreator =
-  !!address &&
-  creator?.toLowerCase() === address.toLowerCase();
+  const isCreator = !!address && creator?.toLowerCase() === address.toLowerCase();
 
   const fullyFunded = Number(raised) >= Number(originalGoal);
   const raisedFormatted = formatUnits(raised, 6);
   const goalFormatted = formatUnits(originalGoal, 6);
   const durationTimestamp = Number(duration);
   const currentTime = chainTimestamp || Math.floor(Date.now() / 1000);
-  const progress =
-  Number(originalGoal) > 0
-    ? (Number(raised) / Number(originalGoal)) * 100
-    : 0;
+  const progress = Number(originalGoal) > 0 ? (Number(raised) / Number(originalGoal)) * 100 : 0;
 
   const isActive = currentTime < durationTimestamp;
-  const daysLeft = isActive
-  ? Math.max(
-      0,
-      Math.ceil((durationTimestamp - currentTime) / 86400)
-    )
-  : 0;
+  const daysLeft = isActive ? Math.max(0, Math.ceil((durationTimestamp - currentTime) / 86400)) : 0;
 
-  const hasFailed =
-    currentTime > durationTimestamp &&
-    Number(raised) < Number(originalGoal);
-
-  const canRefund =
-    hasFailed &&
-    hasContributed &&
-    !anyMilestoneReleased;
+  const hasFailed = currentTime > durationTimestamp && Number(raised) < Number(originalGoal);
+  const canRefund = hasFailed && hasContributed && !anyMilestoneReleased;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50">
       
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
             <Link 
               href="/"
-              className="flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-colors font-medium"
+              className="flex items-center gap-2 text-gray-700 hover:text-green-600 transition-colors font-medium group"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               Back to projects
             </Link>
             <div className="flex items-center gap-4">
               {isConnected && usdcBalance !== undefined && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl shadow-sm">
                   <Wallet className="w-4 h-4 text-green-600" />
                   <div className="text-sm">
                     <span className="font-bold text-green-900">
@@ -406,45 +379,46 @@ useEffect(() => {
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* LEFT COLUMN */}
           <div className="lg:col-span-2 space-y-8">
             
-            {/* Hero Image */}
-            <div className="relative h-96 rounded-lg overflow-hidden bg-gradient-to-br from-green-400 to-emerald-600">
+            <div className="relative h-96 rounded-3xl overflow-hidden shadow-2xl group">
               {savedImage ? (
                 <img 
                   src={savedImage} 
                   alt={title}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center">
+                <div className="w-full h-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
                   <div className="text-white text-9xl font-bold opacity-20">
                     {title.charAt(0).toUpperCase()}
                   </div>
                 </div>
               )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              
               {state === 1 && (
-                <div className="absolute top-6 right-6 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-bold">
-                  ✓ Successful
+                <div className="absolute top-6 right-6 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  Successful
                 </div>
               )}
               {state === 2 && (
-                <div className="absolute top-6 right-6 bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold">
+                <div className="absolute top-6 right-6 bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
                   ❌ Failed
                 </div>
               )}
               {fullyFunded && state === 0 && (
-                <div className="absolute top-6 right-6 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-bold">
-                  🎉 Fully Funded
+                <div className="absolute top-6 right-6 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg flex items-center gap-2 animate-pulse">
+                  <Zap className="w-4 h-4" />
+                  Fully Funded
                 </div>
               )}
             </div>
 
-            {/* Title & Description */}
-            <div>
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 border border-gray-200 shadow-lg">
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
                 {title}
               </h1>
@@ -455,22 +429,21 @@ useEffect(() => {
 
               <div className="flex items-center gap-3 text-gray-600">
                 <span>
-                  By{' '}
-                  <span className="font-mono font-medium">{creator.slice(0, 6)}...{creator.slice(-4)}</span>
+                  By <span className="font-mono font-medium">{creator.slice(0, 6)}...{creator.slice(-4)}</span>
                 </span>
                 {isCreator && (
-                  <span className="ml-2 px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded">
+                  <span className="px-3 py-1 bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 text-xs font-bold rounded-full border border-green-200">
                     YOU
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="border-t border-gray-200"></div>
-
-            {/* Rewards */}
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Rewards</h2>
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 border border-gray-200 shadow-lg">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Award className="w-6 h-6 text-green-600" />
+                Rewards
+              </h2>
               
               <div className="space-y-4">
                 {tiers && Array.isArray(tiers) && tiers.length > 0 ? (
@@ -482,24 +455,29 @@ useEffect(() => {
                     return (
                       <div 
                         key={idx}
-                        className="border border-gray-200 rounded-lg p-6 hover:border-green-500 hover:shadow-md transition-all bg-white"
+                        className="relative border-2 border-gray-200 rounded-2xl p-6 hover:border-green-400 hover:shadow-xl transition-all bg-white/50 backdrop-blur-sm group"
                       >
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="font-bold text-lg text-gray-900">{name}</h3>
-                            <p className="text-green-600 font-bold text-xl mt-1">
-                              ${Number(minFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })} or more
-                            </p>
+                        <div className="absolute inset-0 bg-gradient-to-br from-green-50/50 to-emerald-50/50 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="relative">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h3 className="font-bold text-lg text-gray-900">{name}</h3>
+                              <p className="text-green-600 font-bold text-xl mt-1">
+                                ${Number(minFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })} or more
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <p className="text-gray-700 mb-4">{desc}</p>
-                        <div className="flex justify-between items-center text-sm text-gray-600">
-                          <span>{Number(currentBackers)} backers</span>
-                          {spotsLeft > 0 ? (
-                            <span className="text-green-600 font-medium">{spotsLeft} left</span>
-                          ) : (
-                            <span className="text-red-600 font-medium">All claimed</span>
-                          )}
+                          <p className="text-gray-700 mb-4">{desc}</p>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-gray-600">
+                              <span className="font-bold text-gray-900">{Number(currentBackers)}</span> backers
+                            </span>
+                            {spotsLeft > 0 ? (
+                              <span className="text-green-600 font-medium">{spotsLeft} spots left</span>
+                            ) : (
+                              <span className="text-red-600 font-medium">All claimed</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -510,14 +488,14 @@ useEffect(() => {
               </div>
             </div>
 
-            <div className="border-t border-gray-200"></div>
-
-            {/* Milestones */}
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Milestones & Voting</h2>
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 border border-gray-200 shadow-lg">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Target className="w-6 h-6 text-green-600" />
+                Milestones & Voting
+              </h2>
               
               {!fullyFunded && !isActive && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-6">
                   <p className="text-yellow-800 text-sm font-medium">
                     ⚠️ Campaign didn't reach its goal. Milestones are locked.
                   </p>
@@ -547,41 +525,41 @@ useEffect(() => {
                     return (
                       <div 
                         key={idx}
-                        className={`border-2 rounded-xl p-6 bg-white transition-all ${
-                          isVotingOpen ? 'border-blue-300 shadow-lg' : 
-                          fundsReleased ? 'border-green-300' :
-                          approved ? 'border-green-200' :
-                          'border-gray-200'
+                        className={`relative border-2 rounded-2xl p-6 transition-all ${
+                          isVotingOpen ? 'border-blue-400 bg-blue-50/50 shadow-xl' : 
+                          fundsReleased ? 'border-green-400 bg-green-50/50' :
+                          approved ? 'border-green-300 bg-green-50/30' :
+                          'border-gray-200 bg-white/50'
                         }`}
                       >
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <h3 className="font-bold text-lg text-gray-900">Milestone {idx + 1}</h3>
                             <p className="text-sm text-green-600 font-medium mt-1">
-                              {percentage}% of original goal (${(Number(goalFormatted) * percentage / 100).toFixed(0)})
+                              {percentage}% of goal (${(Number(goalFormatted) * percentage / 100).toFixed(0)})
                             </p>
                           </div>
                           
                           {fundsReleased ? (
-                            <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
+                            <span className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1">
                               <CheckCircle className="w-3 h-3" />
                               Released
                             </span>
                           ) : approved ? (
-                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full flex items-center gap-1">
+                            <span className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1">
                               <CheckCircle className="w-3 h-3" />
                               Approved
                             </span>
                           ) : isVotingOpen ? (
-                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full animate-pulse">
+                            <span className="px-3 py-1.5 bg-gradient-to-r from-blue-400 to-blue-600 text-white text-xs font-bold rounded-full shadow-lg animate-pulse">
                               🗳️ Voting Open
                             </span>
                           ) : votingFinalized ? (
-                            <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+                            <span className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full shadow-lg">
                               ❌ Rejected
                             </span>
                           ) : (
-                            <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-full">
+                            <span className="px-3 py-1.5 bg-gray-200 text-gray-600 text-xs font-bold rounded-full">
                               Pending
                             </span>
                           )}
@@ -589,9 +567,12 @@ useEffect(() => {
 
                         <p className="text-gray-700 mb-4">{desc}</p>
 
-                        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                        <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 mb-4 border border-gray-200">
                           <div className="flex items-center justify-between text-sm mb-2">
-                            <span className="text-gray-600">Deadline:</span>
+                            <span className="text-gray-600 flex items-center gap-2">
+                              <Clock className="w-4 h-4" />
+                              Deadline:
+                            </span>
                             <span className="font-medium text-gray-900">{new Date(deadlineTimestamp * 1000).toLocaleDateString()}</span>
                           </div>
                           
@@ -613,7 +594,10 @@ useEffect(() => {
                         {totalVotes > 0 && (
                           <div className="mb-4">
                             <div className="flex justify-between text-sm mb-2">
-                              <span className="text-gray-600">Votes ({totalContributors ? Number(totalContributors) : 0} contributors)</span>
+                              <span className="text-gray-600 flex items-center gap-2">
+                                <Users className="w-4 h-4" />
+                                Votes ({totalContributors ? Number(totalContributors) : 0} contributors)
+                              </span>
                               <span className="font-medium text-gray-900">
                                 {totalVotes} voted • {approvalRate.toFixed(0)}% approval
                               </span>
@@ -622,24 +606,24 @@ useEffect(() => {
                             <div className="space-y-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-medium text-green-600 w-12">YES</span>
-                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
                                   <div 
-                                    className="bg-green-500 h-2 rounded-full transition-all"
+                                    className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${approvalRate}%` }}
                                   />
                                 </div>
-                                <span className="text-xs font-bold text-green-700 w-8">{votesFor}</span>
+                                <span className="text-xs font-bold text-green-700 w-12 text-right">{votesFor}</span>
                               </div>
                               
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-medium text-red-600 w-12">NO</span>
-                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
                                   <div 
-                                    className="bg-red-500 h-2 rounded-full transition-all"
+                                    className="bg-gradient-to-r from-red-500 to-pink-500 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${100 - approvalRate}%` }}
                                   />
                                 </div>
-                                <span className="text-xs font-bold text-red-700 w-8">{votesAgainst}</span>
+                                <span className="text-xs font-bold text-red-700 w-12 text-right">{votesAgainst}</span>
                               </div>
                             </div>
                           </div>
@@ -650,14 +634,14 @@ useEffect(() => {
                             <button
                               onClick={() => handleVoteMilestone(idx, true)}
                               disabled={isPending || isConfirming}
-                              className="flex-1 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                              className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-bold hover:shadow-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                             >
                               👍 Vote YES
                             </button>
                             <button
                               onClick={() => handleVoteMilestone(idx, false)}
                               disabled={isPending || isConfirming}
-                              className="flex-1 bg-red-500 text-white py-3 rounded-lg font-bold hover:bg-red-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                              className="flex-1 bg-gradient-to-r from-red-500 to-pink-500 text-white py-3 rounded-xl font-bold hover:shadow-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                             >
                               👎 Vote NO
                             </button>
@@ -668,7 +652,7 @@ useEffect(() => {
                           <button
                             onClick={() => handleFinalizeMilestone(idx)}
                             disabled={isPending || isConfirming}
-                            className="w-full bg-blue-500 text-white py-3 rounded-lg font-bold hover:bg-blue-600 disabled:opacity-50 transition-all"
+                            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-3 rounded-xl font-bold hover:shadow-xl disabled:opacity-50 transition-all"
                           >
                             ✅ Finalize Voting
                           </button>
@@ -678,20 +662,20 @@ useEffect(() => {
                           <button
                             onClick={() => handleReleaseFunds(idx)}
                             disabled={isPending || isConfirming}
-                            className="w-full bg-purple-500 text-white py-3 rounded-lg font-bold hover:bg-purple-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-bold hover:shadow-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                           >
                             💰 Release Funds
                           </button>
                         )}
 
                         {canRelease && !isPreviousMilestoneReleased && (
-                          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-800">
+                          <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-800">
                             ⏳ Previous milestone must be released first
                           </div>
                         )}
 
                         {!isActive && fullyFunded && currentTime < deadlineTimestamp && (
-                          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-sm text-yellow-800">
                             ⏳ Voting will open on {new Date(deadlineTimestamp * 1000).toLocaleDateString()}
                           </div>
                         )}
@@ -705,173 +689,191 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* RIGHT COLUMN - Contribution Box */}
+          {/* SIDEBAR - Glassmorphism Contribution Box */}
           <div className="lg:col-span-1">
-            <div className="bg-white border border-gray-200 rounded-lg p-6 sticky top-24">
-              
-              <div className="mb-6">
-                <div className="text-3xl font-bold text-gray-900 mb-1">
-                  ${Number(raisedFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                </div>
-                <div className="text-sm text-gray-600 mb-4">
-                  pledged of ${Number(goalFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })} goal
+            <div className="sticky top-24 space-y-6">
+              <div className="relative bg-white/60 backdrop-blur-2xl border-2 border-white/50 rounded-3xl p-6 shadow-2xl">
+                {/* Gradient glow */}
+                <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 to-emerald-500/10 rounded-3xl blur-xl -z-10" />
+                
+                <div className="mb-6">
+                  <div className="text-4xl font-black text-gray-900 mb-2">
+                    ${Number(raisedFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  </div>
+                  <div className="text-sm text-gray-600 mb-4">
+                    pledged of <span className="font-bold text-gray-900">${Number(goalFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span> goal
+                  </div>
+
+                  <div className="relative w-full bg-gray-200 rounded-full h-3 mb-6 overflow-hidden">
+                    <div 
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 rounded-full transition-all duration-1000"
+                      style={{ 
+                        width: `${Math.min(progress, 100)}%`,
+                        boxShadow: '0 0 20px rgba(34, 197, 94, 0.5)'
+                      }}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-xl mb-2">
+                        <TrendingUp className="w-5 h-5 text-green-600 mx-auto" />
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900">{progress.toFixed(0)}%</div>
+                      <div className="text-xs text-gray-600">funded</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="p-3 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-xl mb-2">
+                        <Clock className="w-5 h-5 text-blue-600 mx-auto" />
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900">{daysLeft}</div>
+                      <div className="text-xs text-gray-600">{isActive ? 'days left' : 'ended'}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="p-3 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl mb-2">
+                        <Users className="w-5 h-5 text-purple-600 mx-auto" />
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900">{totalContributors ? Number(totalContributors) : 0}</div>
+                      <div className="text-xs text-gray-600">backers</div>
+                    </div>
+                  </div>
+
+                  {fullyFunded && (
+                    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-2xl p-4 mt-6">
+                      <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                        <Zap className="w-5 h-5 text-blue-600" />
+                        Fully Funded!
+                      </h3>
+                      <p className="text-xs text-gray-600 italic">
+                        Milestone voting will begin after deadlines
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-                  <div 
-                    className="bg-green-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(progress, 100)}%` }}
-                  />
-                </div>
+                <div className="border-t-2 border-gray-200/50 mb-6"></div>
 
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-2xl font-bold text-gray-900">{progress.toFixed(0)}%</div>
-                    <div className="text-sm text-gray-600">funded</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-gray-900">{daysLeft}</div>
-                    <div className="text-sm text-gray-600">{isActive ? 'days to go' : 'ended'}</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-gray-900">{totalContributors ? Number(totalContributors) : 0}</div>
-                    <div className="text-sm text-gray-600">backers</div>
-                  </div>
-                </div>
-
-                {fullyFunded && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                    <h3 className="font-bold text-gray-900 mb-2">🎉 Fully Funded!</h3>
-                    <p className="text-xs text-gray-600 italic">
-                      Milestone voting will begin after deadlines
+                {!!canRefund && (
+                  <div className="bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200 rounded-2xl p-4 mb-4">
+                    <p className="text-red-800 text-sm font-medium mb-3 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Campaign did not reach its goal
+                    </p>
+                    <button
+                      onClick={handleRefund}
+                      disabled={isPending || isConfirming}
+                      className="w-full bg-gradient-to-r from-red-500 to-pink-500 text-white py-3 rounded-xl font-bold hover:shadow-xl disabled:opacity-50 transition-all"
+                    >
+                      {isPending || isConfirming ? '⏳ Processing...' : '💸 Get Refund'}
+                    </button>
+                    <p className="text-xs text-gray-600 text-center mt-2">
+                      You contributed ${userContribution ? formatUnits(userContribution as bigint, 6) : '0'}
                     </p>
                   </div>
                 )}
-              </div>
 
-              <div className="border-t border-gray-200 mb-6"></div>
-
-              {!!canRefund && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <p className="text-red-800 text-sm font-medium mb-3">
-                    😔 Campaign did not reach its goal
-                  </p>
-                  <button
-                    onClick={handleRefund}
-                    disabled={isPending || isConfirming}
-                    className="w-full bg-red-500 text-white py-3 rounded-lg font-bold hover:bg-red-600 disabled:opacity-50 transition-all"
-                  >
-                    {isPending || isConfirming ? '⏳ Processing...' : '💸 Get Refund'}
-                  </button>
-                  <p className="text-xs text-gray-600 text-center mt-2">
-                    You contributed $
-                    {userContribution
-                      ? formatUnits(userContribution as bigint, 6)
-                      : '0'}
-                  </p>
-                </div>
-              )}
-
-              {isCreator && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <p className="text-blue-800 text-sm font-medium mb-3">
-                    ℹ️ You're the creator - release funds via milestones
-                  </p>
-                </div>
-              )}
-
-              {isConnected && (
-                <div className="mb-4">
-                  <button
-                    onClick={handleMintUSDC}
-                    disabled={mintingUSDC}
-                    className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                  >
-                    {mintingUSDC ? '⏳ Minting...' : '🎁 Get 10,000 Test USDC'}
-                  </button>
-                  <p className="text-xs text-gray-500 text-center mt-2">
-                    For testing purposes only
-                  </p>
-                </div>
-              )}
-
-              {isActive && !isCreator && (
-                <>
-                  {step === 'approved' && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-start gap-3">
-                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-green-800">USDC Approved!</p>
-                        <p className="text-sm text-green-700">Click below to contribute</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-4 mb-6">
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-2">
-                        Pledge amount (USDC)
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-3 text-gray-500 font-medium">$</span>
-                        <input
-                          type="number"
-                          placeholder="25"
-                          value={contributionAmount}
-                          onChange={(e) => setContributionAmount(e.target.value)}
-                          className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
-                          min="10"
-                          step="1"
-                          disabled={isPending || isConfirming}
-                        />
-                      </div>
-                      {tiers && Array.isArray(tiers) && tiers[selectedTier] && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Minimum: ${formatUnits((tiers[selectedTier] as any).minContribution, 6)}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-2">
-                        Choose your reward
-                      </label>
-                      <select
-                        value={selectedTier}
-                        onChange={(e) => setSelectedTier(parseInt(e.target.value))}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
-                        disabled={isPending || isConfirming}
-                      >
-                        {Array.isArray(tiers) && tiers.map((tier: any, idx: number) => {
-                          const spotsLeft = Number(tier.maxBackers) - Number(tier.currentBackers);
-                          return (
-                            <option key={idx} value={idx} disabled={spotsLeft <= 0}>
-                              {tier.name} - ${formatUnits(tier.minContribution, 6)}+ {spotsLeft <= 0 ? '(Full)' : `(${spotsLeft} left)`}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
+                {isCreator && (
+                  <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-2xl p-4 mb-4">
+                    <p className="text-blue-800 text-sm font-medium flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      You're the creator - release funds via milestones
+                    </p>
                   </div>
+                )}
 
-                  <button
-                    onClick={handleContribute}
-                    disabled={!isConnected || isPending || isConfirming || !contributionAmount}
-                    className="w-full bg-green-500 text-white py-4 rounded-full font-bold text-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    {isPending && '⏳ Confirm in wallet...'}
-                    {!isPending && isConfirming && step === 'needsApproval' && '⏳ Approving USDC...'}
-                    {!isPending && isConfirming && step === 'contributing' && '⏳ Contributing...'}
-                    {!isPending && !isConfirming && step === 'approved' && '✓ Click to contribute'}
-                    {!isPending && !isConfirming && step === 'idle' && !isConnected && '🔒 Connect wallet'}
-                    {!isPending && !isConfirming && step === 'idle' && isConnected && 'Back this project'}
-                  </button>
+                {isConnected && (
+                  <div className="mb-4">
+                    <button
+                      onClick={handleMintUSDC}
+                      disabled={mintingUSDC}
+                      className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-3 rounded-xl font-medium hover:shadow-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      {mintingUSDC ? '⏳ Minting...' : '🎁 Get 10,000 Test USDC'}
+                    </button>
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      For testing purposes only
+                    </p>
+                  </div>
+                )}
 
-                  <p className="text-center text-xs text-gray-500 mt-4">
-                    By continuing, you agree to our Terms
-                  </p>
-                </>
-              )}
+                {isActive && !isCreator && (
+                  <>
+                    {step === 'approved' && (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-4 mb-4 flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-green-800">USDC Approved!</p>
+                          <p className="text-sm text-green-700">Click below to contribute</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-4 mb-6">
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          Pledge amount (USDC)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-3 text-gray-500 font-medium">$</span>
+                          <input
+                            type="number"
+                            placeholder="25"
+                            value={contributionAmount}
+                            onChange={(e) => setContributionAmount(e.target.value)}
+                            className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 bg-white/80 backdrop-blur-sm"
+                            min="10"
+                            step="1"
+                            disabled={isPending || isConfirming}
+                          />
+                        </div>
+                        {tiers && Array.isArray(tiers) && tiers[selectedTier] && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Minimum: ${formatUnits((tiers[selectedTier] as any).minContribution, 6)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          Choose your reward
+                        </label>
+                        <select
+                          value={selectedTier}
+                          onChange={(e) => setSelectedTier(parseInt(e.target.value))}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 bg-white/80 backdrop-blur-sm"
+                          disabled={isPending || isConfirming}
+                        >
+                          {Array.isArray(tiers) && tiers.map((tier: any, idx: number) => {
+                            const spotsLeft = Number(tier.maxBackers) - Number(tier.currentBackers);
+                            return (
+                              <option key={idx} value={idx} disabled={spotsLeft <= 0}>
+                                {tier.name} - ${formatUnits(tier.minContribution, 6)}+ {spotsLeft <= 0 ? '(Full)' : `(${spotsLeft} left)`}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleContribute}
+                      disabled={!isConnected || isPending || isConfirming || !contributionAmount}
+                      className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-4 rounded-2xl font-bold text-lg hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      {isPending && '⏳ Confirm in wallet...'}
+                      {!isPending && isConfirming && step === 'needsApproval' && '⏳ Approving USDC...'}
+                      {!isPending && isConfirming && step === 'contributing' && '⏳ Contributing...'}
+                      {!isPending && !isConfirming && step === 'approved' && '✓ Click to contribute'}
+                      {!isPending && !isConfirming && step === 'idle' && !isConnected && '🔒 Connect wallet'}
+                      {!isPending && !isConfirming && step === 'idle' && isConnected && 'Back this project'}
+                    </button>
+
+                    <p className="text-center text-xs text-gray-500 mt-4">
+                      By continuing, you agree to our Terms
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
