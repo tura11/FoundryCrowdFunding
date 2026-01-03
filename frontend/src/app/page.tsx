@@ -6,7 +6,7 @@ import { useAccount, usePublicClient } from 'wagmi';
 import Link from 'next/link';
 import { formatUnits } from 'viem';
 import { Rocket, Plus, Heart, Sparkles, TrendingUp, Users, Clock, Target } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   const { isConnected } = useAccount();
@@ -54,7 +54,7 @@ export default function Home() {
   if (!mounted) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50 flex items-center justify-center">
-        <div className="text-gray-800 text-2xl font-bold animate-pulse">Loading...</div>
+        <ShimmerLoader />
       </div>
     );
   }
@@ -176,16 +176,17 @@ export default function Home() {
       <section className="relative z-10 bg-white/60 backdrop-blur-sm border-b border-gray-200/50">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="grid grid-cols-3 gap-8">
-            <StatCard 
+            <AnimatedStatCard 
               icon={<Target className="w-7 h-7" />}
-              value={campaignCount?.toString() || '0'}
+              value={Number(campaignCount?.toString() || '0')}
               label="Projects"
               color="green"
             />
-            <StatCard 
+            <AnimatedStatCard 
               icon={<TrendingUp className="w-7 h-7" />}
-              value="100%"
+              value={100}
               label="Decentralized"
+              suffix="%"
               color="emerald"
             />
             <StatCard 
@@ -277,13 +278,142 @@ export default function Home() {
           from { opacity: 0; transform: translateY(40px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes particle {
+          0% {
+            opacity: 1;
+            transform: translate(0, 0) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translate(var(--tx), var(--ty)) scale(0);
+          }
+        }
         .animate-float { animation: float linear infinite; }
         .animate-fade-in { animation: fade-in 0.8s ease-out forwards; }
         .animate-slide-up { animation: slide-up 1s ease-out forwards; }
+        .animate-shimmer { animation: shimmer 2s infinite; }
+        .animate-particle { animation: particle 1s ease-out forwards; }
       `}</style>
     </div>
   );
 }
+function AnimatedStatCard({ icon, value, label, suffix = '', color }: { 
+  icon: React.ReactNode, 
+  value: number, 
+  label: string, 
+  suffix?: string,
+  color: string 
+}) {
+  const [count, setCount] = useState(0);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasAnimated) {
+          setHasAnimated(true);
+          const duration = 2000;
+          const steps = 60;
+          const increment = value / steps;
+          let current = 0;
+          
+          const timer = setInterval(() => {
+            current += increment;
+            if (current >= value) {
+              setCount(value);
+              clearInterval(timer);
+            } else {
+              setCount(Math.floor(current));
+            }
+          }, duration / steps);
+          
+          return () => clearInterval(timer);
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, [value, hasAnimated]);
+
+  const colorClasses = {
+    green: 'from-green-500 to-emerald-500',
+    emerald: 'from-emerald-500 to-teal-500',
+    teal: 'from-teal-500 to-cyan-500'
+  };
+
+  return (
+    <div ref={ref} className="group relative">
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-white/10 backdrop-blur-sm rounded-2xl blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="relative bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-6 hover:border-green-300 transition-all transform hover:scale-105 text-center">
+        <div className={`inline-flex p-3 bg-gradient-to-br ${colorClasses[color as keyof typeof colorClasses]} rounded-xl text-white mb-3 shadow-lg`}>
+          {icon}
+        </div>
+        <div className="text-3xl font-bold text-gray-900 mb-1">
+          {count}{suffix}
+        </div>
+        <div className="text-sm text-gray-600">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+// 5. PROGRESS BAR WITH MILESTONE MARKERS
+function ProgressBarWithMilestones({ progress }: { progress: number }) {
+  const milestones = [25, 50, 75, 100];
+  
+  return (
+    <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
+      {/* Progress fill with shimmer */}
+      <div
+        className="absolute inset-y-0 left-0 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 rounded-full transition-all duration-1000"
+        style={{ 
+          width: `${Math.min(progress, 100)}%`,
+          boxShadow: '0 0 20px rgba(34, 197, 94, 0.5)'
+        }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+      </div>
+      
+      {/* Milestone markers */}
+      {milestones.map((milestone) => (
+        <div
+          key={milestone}
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10"
+          style={{ left: `${milestone}%` }}
+        >
+          <div 
+            className={`w-4 h-4 rounded-full border-2 transition-all duration-500 ${
+              progress >= milestone 
+                ? 'bg-green-500 border-white shadow-lg scale-110' 
+                : 'bg-white border-gray-300'
+            }`}
+          >
+            {progress >= milestone && (
+              <div className="absolute inset-0 rounded-full bg-green-400 animate-ping opacity-75" />
+            )}
+          </div>
+          
+          {/* Milestone label */}
+          <div className={`absolute top-5 left-1/2 -translate-x-1/2 text-xs font-bold whitespace-nowrap transition-colors ${
+            progress >= milestone ? 'text-green-600' : 'text-gray-400'
+          }`}>
+            {milestone}%
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+} 2000;
 
 function StatCard({ icon, value, label, color }: { icon: React.ReactNode, value: string, label: string, color: string }) {
   const colorClasses = {
@@ -306,12 +436,31 @@ function StatCard({ icon, value, label, color }: { icon: React.ReactNode, value:
   );
 }
 
+// 3. SHIMMER LOADER (LinkedIn-style gradient)
+function ShimmerLoader() {
+  return (
+    <div className="space-y-4 w-full max-w-md">
+      <div className="relative w-full h-12 bg-gray-200 rounded-xl overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent animate-shimmer" />
+      </div>
+      <div className="relative w-3/4 h-12 bg-gray-200 rounded-xl overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent animate-shimmer" style={{ animationDelay: '0.2s' }} />
+      </div>
+      <div className="relative w-5/6 h-12 bg-gray-200 rounded-xl overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent animate-shimmer" style={{ animationDelay: '0.4s' }} />
+      </div>
+    </div>
+  );
+}
+
+// 2. CAMPAIGN CARD WITH PARTICLE EFFECTS
 function CampaignCard({ campaignId, chainTimestamp }: { campaignId: number, chainTimestamp: number }) {
   const { useCampaign } = useCrowdFunding();
   const { data: campaign, isLoading } = useCampaign(campaignId);
   const [savedImage, setSavedImage] = useState<string | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
+  const [particles, setParticles] = useState<Array<{ id: number, x: number, y: number, tx: number, ty: number }>>([]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -325,16 +474,40 @@ function CampaignCard({ campaignId, chainTimestamp }: { campaignId: number, chai
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     setMousePosition({ x, y });
+    
+    // Generate confetti-like particles on move
+    if (isHovered && Math.random() > 0.7) {
+      const newParticle = {
+        id: Date.now() + Math.random(),
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+        tx: (Math.random() - 0.5) * 100,
+        ty: Math.random() * -100 - 50
+      };
+      setParticles(prev => [...prev, newParticle]);
+      
+      setTimeout(() => {
+        setParticles(prev => prev.filter(p => p.id !== newParticle.id));
+      }, 1000);
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden border border-gray-200 animate-pulse">
-        <div className="h-64 bg-gray-200"></div>
+      <div className="bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden border border-gray-200">
+        <div className="relative h-64 bg-gray-200 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent animate-shimmer" />
+        </div>
         <div className="p-6 space-y-4">
-          <div className="h-6 bg-gray-200 rounded w-3/4"></div>
-          <div className="h-4 bg-gray-200 rounded w-full"></div>
-          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+          <div className="relative h-6 bg-gray-200 rounded w-3/4 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent animate-shimmer" />
+          </div>
+          <div className="relative h-4 bg-gray-200 rounded w-full overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent animate-shimmer" style={{ animationDelay: '0.1s' }} />
+          </div>
+          <div className="relative h-4 bg-gray-200 rounded w-2/3 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent animate-shimmer" style={{ animationDelay: '0.2s' }} />
+          </div>
         </div>
       </div>
     );
@@ -377,6 +550,21 @@ function CampaignCard({ campaignId, chainTimestamp }: { campaignId: number, chai
             transition: 'transform 0.5s ease-out',
           }}
         />
+
+        {/* Confetti Particles */}
+        {particles.map(particle => (
+          <div
+            key={particle.id}
+            className="absolute w-2 h-2 rounded-full pointer-events-none animate-particle"
+            style={{
+              left: particle.x,
+              top: particle.y,
+              background: ['#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'][Math.floor(Math.random() * 5)],
+              '--tx': `${particle.tx}px`,
+              '--ty': `${particle.ty}px`,
+            } as React.CSSProperties}
+          />
+        ))}
 
         <article 
           className="relative bg-white/90 backdrop-blur-xl rounded-3xl overflow-hidden border border-gray-200/50 shadow-lg hover:shadow-2xl transition-all duration-500"
@@ -426,9 +614,11 @@ function CampaignCard({ campaignId, chainTimestamp }: { campaignId: number, chai
             <div className="space-y-3">
               <div className="flex justify-between items-baseline">
                 <div>
-                  <span className="text-2xl font-black text-gray-900">
-                    ${Number(raisedFormatted).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                  </span>
+                  <AnimatedNumber 
+                    value={Number(raisedFormatted)} 
+                    prefix="$"
+                    className="text-2xl font-black text-gray-900"
+                  />
                   <span className="text-sm text-gray-500 ml-1">raised</span>
                 </div>
                 <div className="text-right">
@@ -439,15 +629,8 @@ function CampaignCard({ campaignId, chainTimestamp }: { campaignId: number, chai
                 </div>
               </div>
 
-              <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 rounded-full transition-all duration-1000"
-                  style={{ 
-                    width: `${Math.min(progress, 100)}%`,
-                    boxShadow: '0 0 20px rgba(34, 197, 94, 0.5)'
-                  }}
-                />
-              </div>
+              {/* 5. PROGRESS BAR WITH MILESTONE MARKERS */}
+              <ProgressBarWithMilestones progress={progress} />
 
               <div className="flex justify-between items-center text-sm">
                 <div className="text-gray-600">
@@ -469,5 +652,56 @@ function CampaignCard({ campaignId, chainTimestamp }: { campaignId: number, chai
         </article>
       </div>
     </Link>
+  );
+}
+
+// ANIMATED NUMBER COMPONENT (for cards)
+function AnimatedNumber({ value, prefix = '', suffix = '', className = '' }: {
+  value: number,
+  prefix?: string,
+  suffix?: string,
+  className?: string
+}) {
+  const [displayValue, setDisplayValue] = useState(0);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasAnimated) {
+          setHasAnimated(true);
+          const duration = 1500;
+          const steps = 30;
+          const increment = value / steps;
+          let current = 0;
+          
+          const timer = setInterval(() => {
+            current += increment;
+            if (current >= value) {
+              setDisplayValue(value);
+              clearInterval(timer);
+            } else {
+              setDisplayValue(current);
+            }
+          }, duration / steps);
+          
+          return () => clearInterval(timer);
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, [value, hasAnimated]);
+
+  return (
+    <span ref={ref} className={className}>
+      {prefix}{displayValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}{suffix}
+    </span>
   );
 }
