@@ -163,7 +163,7 @@ export default function Dashboard() {
 }
 
 /* ==============================================
-   StatsCalculator – czeka na WSZYSTKIE kampanie, potem ustawia liczby naraz
+                StatsCalculator 
    ============================================== */
 function StatsCalculator({
   allCampaignIds,
