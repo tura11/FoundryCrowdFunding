@@ -11,13 +11,10 @@ contract DeployLocal is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // 1. Deploy mock USDC
         MockUSDC usdc = new MockUSDC();
+        //Mint 100k USDC
+        usdc.mint(deployer, 100_000 * 10**6); 
 
-        // Mint sobie dużo USDC do testów (opcjonalnie, ale super przydatne)
-        usdc.mint(deployer, 100_000 * 10**6); // 100 000 USDC
-
-        // 2. Deploy CrowdFunding z adresem naszego mock USDC
         CrowdFunding crowdFunding = new CrowdFunding(address(usdc));
 
         vm.stopBroadcast();
@@ -36,5 +33,4 @@ contract DeployLocal is Script {
 }
 
 //Mock USDC Address:      0x5FbDB2315678afecb367f032d93F642f64180aa3
-  
-  //CrowdFunding Address:   0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+//CrowdFunding Address:   0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
