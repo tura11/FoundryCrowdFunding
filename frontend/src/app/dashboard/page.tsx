@@ -26,7 +26,7 @@ export default function Dashboard() {
 
   const [statsReady, setStatsReady] = useState(false);
 
-  // Reset przy zmianie
+
   useEffect(() => {
     setDashboardStats({ created: 0, backed: 0, active: 0 });
     setStatsReady(false);
@@ -34,7 +34,7 @@ export default function Dashboard() {
 
   const allCampaignIds = useMemo(() => {
     const count = Number(campaignCount || 0);
-    return Array.from({ length: count }, (_, i) => i); // ID od 0, jak w Twoim kontrakcie
+    return Array.from({ length: count }, (_, i) => i); 
   }, [campaignCount]);
 
   useEffect(() => {
