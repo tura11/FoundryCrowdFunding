@@ -223,7 +223,7 @@ function StatsCalculator({
 }
 
 /* ==============================================
-   Dashboard Stats – pokazuje "-" dopóki nie załaduje się WSZYSTKO
+               Dashboard Stats
    ============================================== */
 function DashboardStats({
   allCampaignIds,
