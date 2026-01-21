@@ -371,7 +371,7 @@ contract CrowdFunding is ReentrancyGuard {
         uint256 feeAmount = (milestoneAmount * FEE) / DIVIDER;
         uint256 amountToCreator = milestoneAmount - feeAmount;
 
-        milestone.fundsReleased = true;
+        milestone.fundsReleased = true; 
         campaign.anyMilestoneReleased = true;
 
         bool allReleased = true;
